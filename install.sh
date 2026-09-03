@@ -180,7 +180,7 @@ PKGS_BASE=(
     xdg-user-dirs xdg-utils
     unzip zip 7zip
     reflector pacman-contrib
-    nano vim
+    nano
 )
 # Vendor-neutral graphics base, present regardless of who made the card.
 PKGS_GPU=(
@@ -254,6 +254,10 @@ PKGS_FONTS=(
     noto-fonts noto-fonts-emoji noto-fonts-cjk
 )
 PKGS_THEME=( papirus-icon-theme adwaita-icon-theme gtk3 gtk4 )
+
+# End-user applications. Firefox already gets MOZ_ENABLE_WAYLAND=1 from env.conf
+# and a Picture-in-Picture window rule from rules.conf.
+PKGS_APPS=( firefox neovim vim )
 PKGS_SHELL=( fastfetch btop ripgrep fd bat eza fzf zoxide starship )
 PKGS_GREETD=( greetd greetd-tuigreet )
 PKGS_BLUETOOTH=( bluez bluez-utils blueman )
@@ -264,6 +268,7 @@ PKGS_GAMING=( steam gamemode lib32-gamemode mangohud "${PKGS_GPU32[@]}" )
 WANTED=(
     "${PKGS_BASE[@]}" "${PKGS_GPU[@]}" "${PKGS_AUDIO[@]}" "${PKGS_HYPRLAND[@]}"
     "${PKGS_DESKTOP[@]}" "${PKGS_FONTS[@]}" "${PKGS_THEME[@]}" "${PKGS_SHELL[@]}"
+    "${PKGS_APPS[@]}"
 )
 [[ $DO_GREETD    -eq 1 ]] && WANTED+=( "${PKGS_GREETD[@]}" )
 [[ $DO_BLUETOOTH -eq 1 ]] && WANTED+=( "${PKGS_BLUETOOTH[@]}" )

@@ -96,6 +96,8 @@ vendor-specific is hardcoded in the shipped configs.
 | Launcher | `wofi` |
 | Notifications | `mako` |
 | Terminal | `kitty` |
+| Browser | `firefox` |
+| Editors | `neovim`, `vim` |
 | Files | `thunar` + `gvfs` + `udiskie` |
 | Lock / idle / wallpaper | `hyprlock`, `hypridle`, `hyprpaper` |
 | Audio | PipeWire + WirePlumber |
@@ -133,6 +135,8 @@ Hyprland reloads on save — no restart needed.
 | `SUPER + Return` | Terminal |
 | `SUPER + D` | App launcher |
 | `SUPER + E` | File manager |
+| `SUPER + B` | Browser (firefox) |
+| `SUPER + N` | Editor (nvim in kitty) |
 | `SUPER + Q` | Close window |
 | `SUPER + F` | Fullscreen |
 | `SUPER + V` | Toggle floating |

@@ -1,0 +1,24 @@
+# wofi — application launcher (SUPER+D)
+# One key=value per line. Full list: man 5 wofi
+show=drun
+width=620
+height=460
+prompt=Search
+normal_window=false
+layer=overlay
+
+# Show the icon, the name, and nothing else.
+allow_images=true
+image_size=28
+allow_markup=true
+insensitive=true
+
+# Type to filter, Enter to run, Escape to dismiss.
+term=kitty
+matching=fuzzy
+no_actions=true
+hide_scroll=true
+gtk_dark=true
+
+# Remember what you launch most and float it to the top.
+sort_order=default

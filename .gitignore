@@ -1,0 +1,9 @@
+# Editor and OS cruft
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Nothing generated lands in this repo — monitors.conf and gpu.conf are written
+# straight into ~/.config/hypr by install.sh, deliberately kept out of version
+# control because they are machine-specific.

@@ -1,0 +1,60 @@
+# mako — notification daemon
+# Reload after editing:  makoctl reload
+# Full options: man 5 mako
+
+# ── placement ─────────────────────────────────────────────────────────────────
+# Below the bar (38px bar + 6px margin + a little breathing room).
+anchor=top-right
+margin=10,14,10
+outer-margin=52,0,0,0
+max-visible=5
+layer=overlay
+
+# ── appearance ────────────────────────────────────────────────────────────────
+font=JetBrainsMono Nerd Font 11
+background-color=#1e1e2ee6
+text-color=#cdd6f4
+border-color=#cba6f7
+progress-color=over #45475a
+
+width=380
+height=160
+padding=14
+border-size=2
+border-radius=12
+icon-location=left
+max-icon-size=48
+
+# Pango markup in the body, so apps can use <b> and links.
+markup=1
+format=<b>%s</b>\n%b
+
+# ── behaviour ─────────────────────────────────────────────────────────────────
+default-timeout=6000
+ignore-timeout=0
+group-by=app-name
+
+on-button-left=dismiss
+on-button-middle=none
+on-button-right=dismiss-all
+on-touch=dismiss
+
+# ── per-urgency overrides ─────────────────────────────────────────────────────
+[urgency=low]
+border-color=#45475a
+text-color=#a6adc8
+default-timeout=4000
+
+[urgency=normal]
+border-color=#cba6f7
+
+[urgency=critical]
+border-color=#f38ba8
+background-color=#1e1e2ef2
+text-color=#f38ba8
+# Critical notifications stay until dismissed.
+default-timeout=0
+
+# Volume and brightness popups come from swayosd, so suppress duplicates.
+[app-name=swayosd]
+invisible=1

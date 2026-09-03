@@ -1,0 +1,184 @@
+/* Waybar — Catppuccin Mocha
+ *
+ * Waybar uses GTK3 CSS: no variables, no calc() on colours, and only a subset
+ * of properties. Keep changes to colours and padding and it will behave.
+ */
+
+@define-color base     #1e1e2e;
+@define-color mantle   #181825;
+@define-color crust    #11111b;
+@define-color surface0 #313244;
+@define-color surface1 #45475a;
+@define-color text     #cdd6f4;
+@define-color subtext  #a6adc8;
+@define-color blue     #89b4fa;
+@define-color lavender #b4befe;
+@define-color sapphire #74c7ec;
+@define-color mauve    #cba6f7;
+@define-color red      #f38ba8;
+@define-color peach    #fab387;
+@define-color yellow   #f9e2af;
+@define-color green    #a6e3a1;
+
+* {
+  font-family: "JetBrainsMono Nerd Font", "Font Awesome 6 Free", sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  /* Waybar draws a 1px box around every widget without this. */
+  border: none;
+  border-radius: 0;
+  min-height: 0;
+}
+
+window#waybar {
+  background: transparent;
+  color: @text;
+}
+
+/* The bar itself is a rounded floating slab rather than a full-width strip. */
+.modules-left,
+.modules-center,
+.modules-right {
+  background-color: alpha(@base, 0.85);
+  border: 1px solid alpha(@surface0, 0.9);
+  border-radius: 12px;
+  padding: 0 6px;
+  margin: 3px 0;
+}
+
+/* ── workspaces ──────────────────────────────────────────────────────────── */
+#workspaces {
+  padding: 0 2px;
+}
+
+#workspaces button {
+  color: @surface1;
+  padding: 0 8px;
+  margin: 4px 2px;
+  border-radius: 8px;
+  /* Animate the pill filling in when a workspace becomes active. */
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+#workspaces button:hover {
+  background-color: @surface0;
+  color: @text;
+  /* GTK adds a box-shadow on hover by default; kill it. */
+  box-shadow: none;
+  text-shadow: none;
+}
+
+#workspaces button.active {
+  background-color: @mauve;
+  color: @crust;
+  padding: 0 14px;
+}
+
+#workspaces button.urgent {
+  background-color: @red;
+  color: @crust;
+}
+
+#workspaces button.empty {
+  color: @surface1;
+}
+
+/* ── generic module spacing ──────────────────────────────────────────────── */
+#window,
+#submap,
+#clock,
+#pulseaudio,
+#bluetooth,
+#network,
+#cpu,
+#memory,
+#temperature,
+#battery,
+#tray,
+#privacy,
+#idle_inhibitor,
+#custom-power {
+  padding: 0 10px;
+  margin: 4px 2px;
+  border-radius: 8px;
+  color: @text;
+}
+
+#window {
+  color: @subtext;
+  font-weight: 500;
+}
+
+/* Hide the window title cleanly when there is no window focused. */
+window#waybar.empty #window {
+  background-color: transparent;
+  padding: 0;
+  margin: 0;
+}
+
+#submap {
+  background-color: @peach;
+  color: @crust;
+}
+
+#clock {
+  color: @lavender;
+  font-weight: 700;
+}
+
+/* ── coloured accents ────────────────────────────────────────────────────── */
+#pulseaudio      { color: @sapphire; }
+#bluetooth       { color: @blue; }
+#network         { color: @green; }
+#cpu             { color: @peach; }
+#memory          { color: @mauve; }
+#temperature     { color: @yellow; }
+#battery         { color: @green; }
+#idle_inhibitor  { color: @subtext; }
+
+#pulseaudio.muted        { color: @red; }
+#network.disconnected    { color: @red; }
+#temperature.critical    { color: @red; }
+#idle_inhibitor.activated { color: @peach; }
+
+#battery.warning  { color: @peach; }
+#battery.critical { color: @red; }
+
+/* Blink the battery only when it is genuinely urgent. */
+#battery.critical:not(.charging) {
+  background-color: @red;
+  color: @crust;
+}
+
+#privacy {
+  color: @red;
+}
+
+#custom-power {
+  color: @red;
+  padding: 0 12px;
+  font-size: 14px;
+}
+
+#custom-power:hover {
+  background-color: @red;
+  color: @crust;
+}
+
+#tray menu {
+  background-color: @base;
+  color: @text;
+  border: 1px solid @surface0;
+  border-radius: 8px;
+}
+
+tooltip {
+  background-color: @mantle;
+  border: 1px solid @surface0;
+  border-radius: 8px;
+}
+
+tooltip label {
+  color: @text;
+  padding: 4px;
+}

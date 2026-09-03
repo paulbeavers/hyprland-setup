@@ -128,7 +128,18 @@ Hyprland reloads on save — no restart needed.
 
 ## Keys
 
-`SUPER + /` shows the live cheatsheet, read straight from Hyprland.
+`SUPER + /` shows a live cheatsheet in wofi, read straight from the running
+compositor via `hyprctl binds` — so it can never drift out of sync with
+`keybinds.conf`. It groups submap binds separately, since those only work
+inside that mode.
+
+For a terminal dump instead of the popup:
+
+```bash
+~/.config/hypr/scripts/keybinds.sh --print
+```
+
+Or straight from Hyprland: `hyprctl binds` (raw), `hyprctl -j binds` (JSON).
 
 | Key | Action |
 | --- | --- |

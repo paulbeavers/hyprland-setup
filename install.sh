@@ -764,17 +764,20 @@ EOF
     # ── wallpaper ─────────────────────────────────────────────────────────────
     step "Wallpaper"
     wallpaper="$HOME/Pictures/wallpapers/default.png"
+    # The directory is what SUPER+W lists, so create it even when there is
+    # nothing to put in it yet — an empty picker beats one that errors out.
+    [[ $DRY_RUN -eq 1 ]] || mkdir -p "$(dirname "$wallpaper")"
     if [[ -f $wallpaper ]]; then
         ok "wallpaper already present"
     elif [[ $DRY_RUN -eq 1 ]]; then
         info "[dry-run] would generate a ${max_w}x${max_h} gradient"
     elif command -v magick >/dev/null; then
-        mkdir -p "$(dirname "$wallpaper")"
         magick -size "${max_w}x${max_h}" gradient:'#1e1e2e-#11111b' "$wallpaper"
         ok "generated ${max_w}x${max_h} gradient at $wallpaper"
     else
         warn "imagemagick not available; drop an image at $wallpaper"
     fi
+    info "drop more images in $(dirname "$wallpaper") — SUPER+W switches between them"
 
     # GTK apps do not read Hyprland's config, so set the theme via gsettings.
     if [[ $DRY_RUN -eq 0 ]] && command -v gsettings >/dev/null; then
@@ -865,6 +868,7 @@ $( [[ $DO_GREETD -eq 1 ]] \
     SUPER + 1..9          workspace       SUPER + V    toggle floating
     SUPER + Shift + S     screenshot      SUPER + X    clipboard history
     SUPER + Shift + E     power menu      SUPER + Esc  lock
+    SUPER + W             wallpaper picker
 
   ${C_BLUE}Config:${C_RESET} ~/.config/hypr/  (edits apply live)
   ${C_DIM}Re-run this script any time — it will only refresh what changed.${C_RESET}

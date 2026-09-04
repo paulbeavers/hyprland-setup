@@ -20,8 +20,18 @@ readonly BACKUP_DIR="$HOME/.config-backup-$(date +%Y%m%d-%H%M%S)"
 # Default fractional scale for generated monitor lines. Hyprland requires the
 # scaled resolution to land on a whole pixel, so a scale is only used when it
 # divides that display cleanly; otherwise the script falls back to 1 for that
-# monitor and says so. 5120x2160 / 1.6 = 3200x1350, which is exact.
-DEFAULT_SCALE=1.6
+# monitor and says so. 5120x2160 / (4/3) = 3840x1620, which is exact.
+#
+# DEFAULT_SCALE is the literal written into monitors.conf. Hyprland stores
+# scales as multiples of 1/120 and canonicalises 4/3 to 1.3333334, so use that
+# spelling and `hyprctl monitors` reads back byte-identical.
+#
+# NUM/DEN carry the same value as an exact fraction. They are what the
+# divisibility maths uses: a repeating fraction has no finite decimal form, so
+# rounding the literal and testing that would wrongly reject every resolution.
+DEFAULT_SCALE=1.3333334
+DEFAULT_SCALE_NUM=4
+DEFAULT_SCALE_DEN=3
 
 # ── options ───────────────────────────────────────────────────────────────────
 DO_PACKAGES=auto        # auto | yes | no  — "auto" skips when already provisioned
@@ -290,15 +300,20 @@ pkg_installed() {
 
 unit_enabled() { systemctl is-enabled --quiet "$1" 2>/dev/null; }
 
-# True when scaling `pixels` by `scale` lands on a whole pixel. Hyprland rejects
-# a scale that does not, so this decides whether DEFAULT_SCALE is usable on a
-# given display. Works in integer arithmetic (scale is taken to 3 decimals) to
-# avoid float rounding: 5120 / 1.6 is exact, 1366 / 1.6 = 853.75 is not.
+# True when dividing `pixels` by the default scale lands on a whole pixel.
+# Hyprland does not error on a scale that fails this — it silently snaps to the
+# nearest legal value — so this decides whether DEFAULT_SCALE is usable on a
+# given display before the value is ever written out.
+#
+# Uses the exact fraction, never the decimal literal: pixels / (num/den) is
+# pixels * den / num, so the test is whether num divides pixels * den. All
+# integer arithmetic, no float rounding. 5120 * 3 / 4 = 3840 is exact,
+# 1366 * 3 / 4 = 1024.5 is not.
 scale_divides() {
-    local pixels="$1" scale="$2" milli
-    milli=$(awk -v s="$scale" 'BEGIN { printf "%d", s * 1000 + 0.5 }')
-    [[ $milli -gt 0 ]] || return 1
-    (( pixels * 1000 % milli == 0 ))
+    local pixels="$1"
+    [[ $pixels =~ ^[0-9]+$ ]] || return 1
+    (( DEFAULT_SCALE_NUM > 0 )) || return 1
+    (( pixels * DEFAULT_SCALE_DEN % DEFAULT_SCALE_NUM == 0 ))
 }
 
 # ── work out what is still outstanding ────────────────────────────────────────
@@ -582,8 +597,15 @@ if [[ $DO_CONFIGS -eq 1 ]]; then
             echo "#   highres = highest resolution     preferred = the display's own default"
             echo "#"
             echo "# Scale must land on a whole pixel: RESOLUTION / SCALE has to be an"
-            echo "# integer, or Hyprland rejects it. ${DEFAULT_SCALE} was used below wherever"
-            echo "# it divides cleanly. Check a candidate with:  hyprctl monitors"
+            echo "# integer in BOTH axes, and the scale itself has to be a multiple of"
+            echo "# 1/120 (the Wayland fractional-scale step). Hyprland does not error on"
+            echo "# a bad value — it silently snaps to the nearest legal one, so always"
+            echo "# confirm with \`hyprctl monitors\` after editing."
+            echo "#"
+            echo "# ${DEFAULT_SCALE} (= ${DEFAULT_SCALE_NUM}/${DEFAULT_SCALE_DEN}) was used below wherever it divides cleanly."
+            echo "# Legal scales depend on the resolution; on 5120x2160 the only ones"
+            echo "# between 1x and 2x are 1.0, 1.0666667, 1.25, 1.3333334, 1.6, 1.6666667"
+            echo "# and 2.0 — note that 1.4 and 1.5 are not available there."
             echo
         } > "$monitors_conf"
 
@@ -605,9 +627,10 @@ if [[ $DO_CONFIGS -eq 1 ]]; then
                 if [[ -z $width || -z $height ]]; then
                     scale=1
                     warn "  could not read a mode for $conn; using scale 1"
-                elif scale_divides "$width" "$DEFAULT_SCALE" && scale_divides "$height" "$DEFAULT_SCALE"; then
-                    logical="$(awk -v w="$width" -v h="$height" -v s="$DEFAULT_SCALE" \
-                                   'BEGIN { printf "%dx%d", w/s, h/s }')"
+                elif scale_divides "$width" && scale_divides "$height"; then
+                    # Exact integer maths, matching scale_divides — dividing by
+                    # the rounded literal would truncate 3840 down to 3839.
+                    logical="$(( width * DEFAULT_SCALE_DEN / DEFAULT_SCALE_NUM ))x$(( height * DEFAULT_SCALE_DEN / DEFAULT_SCALE_NUM ))"
                     info "  scale $DEFAULT_SCALE -> ${logical} logical"
                 else
                     scale=1
@@ -619,8 +642,8 @@ if [[ $DO_CONFIGS -eq 1 ]]; then
             done
             echo >> "$monitors_conf"
             echo "# Catch-all for any display plugged in later. If a new monitor has a" >> "$monitors_conf"
-            echo "# resolution ${DEFAULT_SCALE} does not divide evenly, Hyprland will log an error" >> "$monitors_conf"
-            echo "# and pick the nearest valid scale — set an explicit line for it above." >> "$monitors_conf"
+            echo "# resolution ${DEFAULT_SCALE} does not divide evenly, Hyprland will silently" >> "$monitors_conf"
+            echo "# snap to the nearest legal scale — set an explicit line for it above." >> "$monitors_conf"
             echo "monitor = , preferred, auto, ${DEFAULT_SCALE}" >> "$monitors_conf"
             ok "wrote monitors.conf for ${#connected[@]} display(s)"
         fi

@@ -6,9 +6,13 @@
 #     layout-toggle.sh scrolling
 #     layout-toggle.sh --print    print the current layout and exit
 #
-# The switch is a runtime `hyprctl keyword`, so it re-tiles the open windows
-# immediately but does not touch theme.conf: `hyprctl reload` (or a fresh
-# session) puts you back on whatever theme.conf sets as the default.
+# The switch is a runtime `hyprctl eval`, so it re-tiles the open windows
+# immediately but does not touch theme.lua: a fresh session puts you back on
+# whatever theme.lua sets as the default.
+#
+# `hyprctl keyword` is not usable here — the Lua config manager rejects it with
+# "keyword can't work with non-legacy parsers. Use eval." `getoption` is still
+# fine, so reading the current layout is unchanged.
 set -euo pipefail
 
 note() { command -v notify-send >/dev/null && notify-send -a Layout -t 1500 "$@" || true; }
@@ -22,7 +26,7 @@ case "${1-}" in
     *)                   echo "usage: layout-toggle.sh [dwindle|scrolling|--print]" >&2; exit 2 ;;
 esac
 
-hyprctl keyword general:layout "$next" >/dev/null
+hyprctl eval "hl.config({ general = { layout = \"$next\" } })" >/dev/null
 
 case "$next" in
     scrolling) note "Scrolling" "Windows on an endless tape. SUPER + - / = resizes a column." ;;

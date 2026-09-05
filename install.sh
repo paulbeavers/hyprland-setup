@@ -22,7 +22,7 @@ readonly BACKUP_DIR="$HOME/.config-backup-$(date +%Y%m%d-%H%M%S)"
 # divides that display cleanly; otherwise the script falls back to 1 for that
 # monitor and says so. 5120x2160 / (4/3) = 3840x1620, which is exact.
 #
-# DEFAULT_SCALE is the literal written into monitors.conf. Hyprland stores
+# DEFAULT_SCALE is the literal written into monitors.lua. Hyprland stores
 # scales as multiples of 1/120 and canonicalises 4/3 to 1.3333334, so use that
 # spelling and `hyprctl monitors` reads back byte-identical.
 #
@@ -41,7 +41,7 @@ DEFAULT_THEME=catppuccin-mocha
 # ── options ───────────────────────────────────────────────────────────────────
 DO_PACKAGES=auto        # auto | yes | no  — "auto" skips when already provisioned
 DO_CONFIGS=1
-DO_AUR=1
+DO_AUR=0            # opt-in: nothing this script installs comes from the AUR
 DO_GAMING=1
 DO_BLUETOOTH=1
 DO_GREETD=1
@@ -59,11 +59,12 @@ By default the script decides for itself what still needs doing:
   --configs-only       Never touch packages or services.
   --packages-only      Never touch dotfiles.
   --force-packages     Re-run the package and service steps even if complete.
-  --redetect-monitors  Regenerate monitors.conf (otherwise a run leaves your
+  --redetect-monitors  Regenerate monitors.lua (otherwise a run leaves your
                        existing one alone, so hand-tuned layouts survive).
   --dry-run            Show what would change; write nothing.
 
-  --no-aur             Skip building paru.
+  --aur                Also build paru, an AUR helper. Off by default: every
+                       package this script installs is in the official repos.
   --no-gaming          Skip multilib, Steam, gamemode, 32-bit drivers.
   --no-bluetooth       Skip bluez/blueman.
   --no-greetd          Skip the login manager.
@@ -81,7 +82,8 @@ while [[ $# -gt 0 ]]; do
         --force-packages)    DO_PACKAGES=yes ;;
         --redetect-monitors) REDETECT_MONITORS=1 ;;
         --dry-run)           DRY_RUN=1 ;;
-        --no-aur)            DO_AUR=0 ;;
+        --aur)               DO_AUR=1 ;;
+        --no-aur)            DO_AUR=0 ;;   # kept: it used to be the default
         --no-gaming)         DO_GAMING=0 ;;
         --no-bluetooth)      DO_BLUETOOTH=0 ;;
         --no-greetd)         DO_GREETD=0 ;;
@@ -305,6 +307,15 @@ pkg_installed() {
 
 unit_enabled() { systemctl is-enabled --quiet "$1" 2>/dev/null; }
 
+# Hyprland's config is Lua as of 0.55; .conf is removed in 0.57. The GPU blocks
+# below are still written in the old `env = NAME,value` shape because that is
+# the readable form for a heredoc, and converted on the way out. Keeps one
+# translation in one place rather than five vendor blocks in two dialects.
+hyprlang_env_to_lua() {
+    sed -e 's/^#/--/' \
+        -e 's/^env = \([^,]*\),\(.*\)$/hl.env("\1", "\2")/'
+}
+
 # True when dividing `pixels` by the default scale lands on a whole pixel.
 # Hyprland does not error on a scale that fails this — it silently snaps to the
 # nearest legal value — so this decides whether DEFAULT_SCALE is usable on a
@@ -438,17 +449,37 @@ if [[ $RUN_SYSTEM -eq 1 ]]; then
 
     if [[ $DO_AUR -eq 1 ]]; then
         step "AUR helper (paru)"
-        if command -v paru >/dev/null; then
+
+        # Ask paru to run rather than merely checking it is on $PATH. paru links
+        # libalpm, whose soname pacman bumps on major releases; a paru built
+        # against the old one stays installed and executable-looking but dies at
+        # startup with "libalpm.so.15: cannot open shared object file". Testing
+        # for the file alone reports success and repairs nothing.
+        paru_works() { command -v paru >/dev/null && paru --version >/dev/null 2>&1; }
+
+        if paru_works; then
             ok "paru already installed"
         elif [[ $DRY_RUN -eq 1 ]]; then
             info "[dry-run] would build paru from the AUR"
         else
-            info "building paru from the AUR (a few minutes)"
+            if command -v paru >/dev/null; then
+                warn "paru is installed but will not run — rebuilding it"
+                info "$(ldd "$(command -v paru)" 2>/dev/null | grep 'not found' || echo 'broken install')"
+            fi
+
+            # Source package, not paru-bin. The -bin binary is compiled upstream
+            # against whatever libalpm existed at release time and goes stale on
+            # the next pacman bump; building here links against this machine's.
+            info "building paru from source (a few minutes)"
             build_dir="$(mktemp -d)"
-            git clone --depth 1 https://aur.archlinux.org/paru-bin.git "$build_dir/paru-bin"
-            ( cd "$build_dir/paru-bin" && makepkg -si --noconfirm )
+            git clone --depth 1 https://aur.archlinux.org/paru.git "$build_dir/paru"
+            # -s fetch makedeps, -r drop them again after, -c clean the workdir.
+            ( cd "$build_dir/paru" && makepkg -src --noconfirm )
+            # pacman -U rather than makepkg -i, so replacing an older paru-bin
+            # is an ordinary conflict resolution instead of an error.
+            run sudo pacman -U --noconfirm "$build_dir"/paru/paru-*.pkg.tar.*
             rm -rf "$build_dir"
-            ok "paru installed"
+            paru_works && ok "paru installed" || warn "paru built but still will not run"
         fi
     fi
 
@@ -520,7 +551,7 @@ if [[ $DO_CONFIGS -eq 1 ]]; then
 
     # File-by-file rather than directory-at-a-time. Identical files are left
     # untouched, changed ones are backed up first, and files that exist only in
-    # ~/.config (monitors.conf, anything you added) are never removed.
+    # ~/.config (monitors.lua, anything you added) are never removed.
     while IFS= read -r -d '' src; do
         rel="${src#"$CONFIG_SRC"/}"
         dst="$CONFIG_DST/$rel"
@@ -561,7 +592,7 @@ if [[ $DO_CONFIGS -eq 1 ]]; then
     # an existing file is left alone so hand-tuned layouts survive; pass
     # --redetect-monitors to regenerate it.
     step "Displays"
-    monitors_conf="$CONFIG_DST/hypr/monitors.conf"
+    monitors_conf="$CONFIG_DST/hypr/monitors.lua"
 
     max_w=1920; max_h=1080
     connected=()
@@ -580,42 +611,42 @@ if [[ $DO_CONFIGS -eq 1 ]]; then
     done
 
     if [[ -f $monitors_conf && $REDETECT_MONITORS -eq 0 ]]; then
-        ok "keeping your existing monitors.conf (--redetect-monitors to regenerate)"
+        ok "keeping your existing monitors.lua (--redetect-monitors to regenerate)"
         for conn in "${connected[@]:-}"; do
             [[ -n $conn ]] && info "connected: $conn"
         done
     elif [[ $DRY_RUN -eq 1 ]]; then
-        info "[dry-run] would write monitors.conf for ${#connected[@]} display(s)"
+        info "[dry-run] would write monitors.lua for ${#connected[@]} display(s)"
     else
         [[ -f $monitors_conf ]] && {
             mkdir -p "$BACKUP_DIR/hypr"
-            cp -p "$monitors_conf" "$BACKUP_DIR/hypr/monitors.conf"
-            warn "backed up previous monitors.conf"
+            cp -p "$monitors_conf" "$BACKUP_DIR/hypr/monitors.lua"
+            warn "backed up previous monitors.lua"
         }
         {
-            echo "# Generated by hyprland-setup on $(date -Iseconds)."
-            echo "# A re-run leaves this file alone; use --redetect-monitors to rebuild it."
-            echo "# \`hyprctl monitors\` lists modes, \`nwg-displays\` is a GUI for arranging them."
-            echo "#"
-            echo "# Syntax: monitor = NAME, RESOLUTION@HZ, POSITION, SCALE"
-            echo "#   highrr = highest refresh rate the display advertises"
-            echo "#   highres = highest resolution     preferred = the display's own default"
-            echo "#"
-            echo "# Scale must land on a whole pixel: RESOLUTION / SCALE has to be an"
-            echo "# integer in BOTH axes, and the scale itself has to be a multiple of"
-            echo "# 1/120 (the Wayland fractional-scale step). Hyprland does not error on"
-            echo "# a bad value — it silently snaps to the nearest legal one, so always"
-            echo "# confirm with \`hyprctl monitors\` after editing."
-            echo "#"
-            echo "# ${DEFAULT_SCALE} (= ${DEFAULT_SCALE_NUM}/${DEFAULT_SCALE_DEN}) was used below wherever it divides cleanly."
-            echo "# Legal scales depend on the resolution; on 5120x2160 the only ones"
-            echo "# between 1x and 2x are 1.0, 1.0666667, 1.25, 1.3333334, 1.6, 1.6666667"
-            echo "# and 2.0 — note that 1.4 and 1.5 are not available there."
+            echo "-- Generated by hyprland-setup on $(date -Iseconds)."
+            echo "-- A re-run leaves this file alone; use --redetect-monitors to rebuild it."
+            echo "-- \`hyprctl monitors\` lists modes, \`nwg-displays\` is a GUI for arranging them."
+            echo "--"
+            echo "-- Syntax: hl.monitor({ output, mode, position, scale })"
+            echo "--   highrr = highest refresh rate the display advertises"
+            echo "--   highres = highest resolution     preferred = the display's own default"
+            echo "--"
+            echo "-- Scale must land on a whole pixel: RESOLUTION / SCALE has to be an"
+            echo "-- integer in BOTH axes, and the scale itself has to be a multiple of"
+            echo "-- 1/120 (the Wayland fractional-scale step). Hyprland does not error on"
+            echo "-- a bad value — it silently snaps to the nearest legal one, so always"
+            echo "-- confirm with \`hyprctl monitors\` after editing."
+            echo "--"
+            echo "-- ${DEFAULT_SCALE} (= ${DEFAULT_SCALE_NUM}/${DEFAULT_SCALE_DEN}) was used below wherever it divides cleanly."
+            echo "-- Legal scales depend on the resolution; on 5120x2160 the only ones"
+            echo "-- between 1x and 2x are 1.0, 1.0666667, 1.25, 1.3333334, 1.6, 1.6666667"
+            echo "-- and 2.0 — note that 1.4 and 1.5 are not available there."
             echo
         } > "$monitors_conf"
 
         if [[ ${#connected[@]} -eq 0 ]]; then
-            echo "monitor = , preferred, auto, auto" >> "$monitors_conf"
+            echo 'hl.monitor({ output = "", mode = "preferred", position = "auto", scale = "auto" })' >> "$monitors_conf"
             warn "no connected display detected; wrote the catch-all rule"
         else
             x_offset=0
@@ -642,15 +673,15 @@ if [[ $DO_CONFIGS -eq 1 ]]; then
                     warn "  scale $DEFAULT_SCALE does not divide ${width}x${height} evenly; using 1"
                 fi
 
-                echo "monitor = ${conn}, highrr, ${x_offset}x0, ${scale}" >> "$monitors_conf"
+                echo "hl.monitor({ output = \"${conn}\", mode = \"highrr\", position = \"${x_offset}x0\", scale = ${scale} })" >> "$monitors_conf"
                 x_offset=$(( x_offset + ${width:-1920} ))
             done
             echo >> "$monitors_conf"
-            echo "# Catch-all for any display plugged in later. If a new monitor has a" >> "$monitors_conf"
-            echo "# resolution ${DEFAULT_SCALE} does not divide evenly, Hyprland will silently" >> "$monitors_conf"
-            echo "# snap to the nearest legal scale — set an explicit line for it above." >> "$monitors_conf"
-            echo "monitor = , preferred, auto, ${DEFAULT_SCALE}" >> "$monitors_conf"
-            ok "wrote monitors.conf for ${#connected[@]} display(s)"
+            echo "-- Catch-all for any display plugged in later. If a new monitor has a" >> "$monitors_conf"
+            echo "-- resolution ${DEFAULT_SCALE} does not divide evenly, Hyprland will silently" >> "$monitors_conf"
+            echo "-- snap to the nearest legal scale — set an explicit line for it above." >> "$monitors_conf"
+            echo "hl.monitor({ output = \"\", mode = \"preferred\", position = \"auto\", scale = ${DEFAULT_SCALE} })" >> "$monitors_conf"
+            ok "wrote monitors.lua for ${#connected[@]} display(s)"
         fi
     fi
 
@@ -663,10 +694,10 @@ if [[ $DO_CONFIGS -eq 1 ]]; then
     # the content is a pure function of the detected GPUs, which is what makes
     # repeat runs a no-op.
     step "GPU environment"
-    gpu_conf="$CONFIG_DST/hypr/gpu.conf"
+    gpu_conf="$CONFIG_DST/hypr/gpu.lua"
 
     if [[ $DRY_RUN -eq 1 ]]; then
-        info "[dry-run] would ensure gpu.conf matches: ${GPU_VENDORS[*]}"
+        info "[dry-run] would ensure gpu.lua matches: ${GPU_VENDORS[*]}"
     else
         gpu_tmp="$(mktemp)"
         {
@@ -745,24 +776,29 @@ EOF
 #
 # To choose which GPU Hyprland renders on, set AQ_DRM_DEVICES to the card
 # paths in priority order, for example:
-#   env = AQ_DRM_DEVICES,/dev/dri/card1:/dev/dri/card0
+#   hl.env("AQ_DRM_DEVICES", "/dev/dri/card1:/dev/dri/card0")
 # List them with: ls -l /dev/dri/by-path/
 EOF
-            warn "multiple GPUs detected — review ~/.config/hypr/gpu.conf"
+            warn "multiple GPUs detected — review ~/.config/hypr/gpu.lua"
         fi
+
+        # Convert the hyprlang-shaped scratch file into the Lua module.
+        gpu_lua="$(mktemp)"
+        hyprlang_env_to_lua < "$gpu_tmp" > "$gpu_lua"
+        mv "$gpu_lua" "$gpu_tmp"
 
         if [[ -f $gpu_conf ]] && cmp -s "$gpu_tmp" "$gpu_conf"; then
             rm -f "$gpu_tmp"
-            ok "gpu.conf already correct for: ${GPU_VENDORS[*]}"
+            ok "gpu.lua already correct for: ${GPU_VENDORS[*]}"
         else
             if [[ -f $gpu_conf ]]; then
                 mkdir -p "$BACKUP_DIR/hypr"
-                cp -p "$gpu_conf" "$BACKUP_DIR/hypr/gpu.conf"
+                cp -p "$gpu_conf" "$BACKUP_DIR/hypr/gpu.lua"
                 warn "GPU config changed — previous version backed up"
             fi
             mkdir -p "$(dirname "$gpu_conf")"
             mv "$gpu_tmp" "$gpu_conf"
-            ok "wrote gpu.conf for: ${GPU_VENDORS[*]}"
+            ok "wrote gpu.lua for: ${GPU_VENDORS[*]}"
         fi
     fi
 
@@ -843,6 +879,8 @@ if [[ ${NVIDIA_NOTES:-0} -eq 1 ]]; then
     warn "On Maxwell or Pascal (GTX 9xx / 10xx) driver 590 dropped support — you"
     warn "need a legacy branch from the AUR instead:"
     info "    paru -S nvidia-580xx-dkms nvidia-580xx-utils"
+    info "    (this is the one case that needs the AUR: re-run with --aur to"
+    info "     get paru, or clone the packages and makepkg -si by hand.)"
     echo
     info "Early KMS (adding nvidia modules to mkinitcpio MODULES) is optional. It"
     info "is NOT done automatically because it can break resume-from-hibernation."
@@ -867,6 +905,18 @@ if [[ $DO_CONFIGS -eq 1 && $DRY_RUN -eq 0 ]]; then
     # also from a plain terminal by looking the instance up in the runtime dir.
     sig="${HYPRLAND_INSTANCE_SIGNATURE:-}"
     [[ -z $sig ]] && sig="$(ls -1t "${XDG_RUNTIME_DIR:-/run/user/$UID}/hypr" 2>/dev/null | head -1 || true)"
+
+    # Verify the Lua config parses without needing a running compositor. This
+    # is the only check that catches a broken config before you log in.
+    if command -v Hyprland >/dev/null; then
+        result="$(Hyprland --verify-config -c "$CONFIG_DST/hypr/init.lua" 2>&1 | tail -1)"
+        if [[ $result == *"config ok"* ]]; then
+            ok "init.lua parses"
+        else
+            warn "init.lua has errors:"
+            printf '%s\n' "$result" | sed 's/^/        /'
+        fi
+    fi
 
     if command -v hyprctl >/dev/null && [[ -n $sig ]]; then
         errors="$(HYPRLAND_INSTANCE_SIGNATURE="$sig" hyprctl reload 2>/dev/null >/dev/null; \

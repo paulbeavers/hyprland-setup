@@ -54,7 +54,7 @@ Use `--dry-run` to see what would change without writing anything.
 | `--force-packages` | Re-run the package and service steps even if complete |
 | `--redetect-monitors` | Regenerate `monitors.conf` from connected displays |
 | `--dry-run` | Show what would change; write nothing |
-| `--no-aur` | Skip building `paru` |
+| `--aur` | Also build `paru`, an AUR helper (off by default) |
 | `--no-gaming` | Skip multilib, Steam, gamemode, 32-bit drivers |
 | `--no-bluetooth` | Skip `bluez` / `blueman` |
 | `--no-greetd` | No login manager — start Hyprland from a TTY |

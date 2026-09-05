@@ -908,7 +908,7 @@ $( [[ $DO_GREETD -eq 1 ]] \
   ${C_BLUE}Essential keys:${C_RESET}
     SUPER + Return        terminal        SUPER + D    launcher
     SUPER + E             file manager    SUPER + Q    close window
-    SUPER + 1..9          workspace       SUPER + V    toggle floating
+    SUPER + 1..9          workspace       SUPER + C/V  copy / paste
     SUPER + Shift + S     screenshot      SUPER + X    clipboard history
     SUPER + Shift + E     power menu      SUPER + Esc  lock
     SUPER + W             wallpaper       SUPER + Shift + T  colour theme

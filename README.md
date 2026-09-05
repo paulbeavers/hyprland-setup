@@ -150,7 +150,9 @@ Or straight from Hyprland: `hyprctl binds` (raw), `hyprctl -j binds` (JSON).
 | `SUPER + N` | Editor (nvim in kitty) |
 | `SUPER + Q` | Close window |
 | `SUPER + F` | Fullscreen |
-| `SUPER + V` | Toggle floating |
+| `SUPER + CTRL + V` | Toggle floating |
+| `SUPER + CTRL + C` | Centre window |
+| `SUPER + C` / `SUPER + V` | Copy / paste (Mac-style) |
 | `SUPER + 1..0` | Switch workspace |
 | `SUPER + SHIFT + 1..0` | Move window to workspace |
 | `SUPER + Tab` / `SUPER + SHIFT + Tab` | Next / previous workspace (wraps) |
@@ -180,6 +182,14 @@ Or straight from Hyprland: `hyprctl binds` (raw), `hyprctl -j binds` (JSON).
   `hyprctl keyword`, so `hyprctl reload` or a new session returns to the
   `theme.conf` default; change that line to start in scrolling instead.
   `SUPER + ALT + ...` binds drive the tape and do nothing under dwindle.
+- **Mac-style copy and paste.** `SUPER + C` and `SUPER + V` are bound to
+  `clipboard.sh`, which looks at the focused window's class and forwards the
+  shortcut that application actually understands: `Ctrl+Shift+C/V` in a
+  terminal, where `Ctrl+C` is SIGINT, and `Ctrl+C/V` everywhere else. Hyprland
+  grabs the keys before the app sees them, so the forwarding is what makes it
+  work at all. The window actions that used to sit on those keys moved to
+  `SUPER + CTRL + C` and `SUPER + CTRL + V`. A terminal launched with a custom
+  `--class` will not be recognised; add it to `TERMINALS` in the script.
 - **`monitors.conf` is generated**, not shipped, so the layout matches the
   machine you install on. Re-run the installer after changing monitors, or use
   `nwg-displays` for a GUI.

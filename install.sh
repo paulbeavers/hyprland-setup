@@ -33,6 +33,11 @@ DEFAULT_SCALE=1.3333334
 DEFAULT_SCALE_NUM=4
 DEFAULT_SCALE_DEN=3
 
+# Colour scheme applied on a first install. A re-run keeps whatever was last
+# picked with SUPER+SHIFT+T instead, so this only ever decides the starting
+# point. Must match a filename in config/hypr/themes/ without the extension.
+DEFAULT_THEME=catppuccin-mocha
+
 # ── options ───────────────────────────────────────────────────────────────────
 DO_PACKAGES=auto        # auto | yes | no  — "auto" skips when already provisioned
 DO_CONFIGS=1
@@ -761,6 +766,35 @@ EOF
         fi
     fi
 
+    # ── colour theme ──────────────────────────────────────────────────────────
+    # Several configs are rendered rather than copied: waybar and wofi @import a
+    # colors.css, hypr sources a colors.conf, kitty and mako include their own.
+    # None of those exist until a theme is applied, so this has to run on every
+    # install or waybar comes up unstyled.
+    step "Colour theme"
+    theme_script="$CONFIG_DST/hypr/scripts/theme.sh"
+    theme_dir="$CONFIG_DST/hypr/themes"
+    theme="$DEFAULT_THEME"
+
+    # Keep the user's pick across a re-run, but only if that theme still exists.
+    if [[ -r "$CONFIG_DST/hypr/.active-theme" ]]; then
+        prev="$(<"$CONFIG_DST/hypr/.active-theme")"
+        [[ -f "$theme_dir/${prev}.theme" ]] && theme="$prev"
+    fi
+
+    if [[ $DRY_RUN -eq 1 ]]; then
+        info "[dry-run] would apply the $theme colour theme"
+    elif [[ ! -x $theme_script ]]; then
+        warn "theme.sh is missing from $theme_script"
+    elif "$theme_script" --no-reload --set "$theme"; then
+        # --no-reload because nothing is running yet on a fresh install; the
+        # validation step below reloads Hyprland, and waybar starts clean.
+        ok "applied the $theme colour theme"
+        info "SUPER+SHIFT+T switches between $(find "$theme_dir" -name '*.theme' | wc -l) schemes"
+    else
+        warn "could not apply the $theme theme — try: theme.sh --list"
+    fi
+
     # ── wallpaper ─────────────────────────────────────────────────────────────
     step "Wallpaper"
     wallpaper="$HOME/Pictures/wallpapers/default.png"
@@ -777,7 +811,16 @@ EOF
     else
         warn "imagemagick not available; drop an image at $wallpaper"
     fi
-    info "drop more images in $(dirname "$wallpaper") — SUPER+W switches between them"
+    # hyprpaper.conf and hyprlock.conf both name the current wallpaper, and both
+    # were just overwritten by the config sync. Put the recorded pick back.
+    wall_script="$CONFIG_DST/hypr/scripts/wallpaper.sh"
+    if [[ $DRY_RUN -eq 1 ]]; then
+        info "[dry-run] would restore the recorded wallpaper"
+    elif [[ -x $wall_script ]] && "$wall_script" --no-reload --restore; then
+        [[ -r "$CONFIG_DST/hypr/.active-wallpaper" ]] \
+            && ok "restored $(basename "$(<"$CONFIG_DST/hypr/.active-wallpaper")")"
+    fi
+    info "SUPER+W picks between these and the wallpapers Hyprland ships in /usr/share/hypr"
 
     # GTK apps do not read Hyprland's config, so set the theme via gsettings.
     if [[ $DRY_RUN -eq 0 ]] && command -v gsettings >/dev/null; then
@@ -868,7 +911,7 @@ $( [[ $DO_GREETD -eq 1 ]] \
     SUPER + 1..9          workspace       SUPER + V    toggle floating
     SUPER + Shift + S     screenshot      SUPER + X    clipboard history
     SUPER + Shift + E     power menu      SUPER + Esc  lock
-    SUPER + W             wallpaper picker
+    SUPER + W             wallpaper       SUPER + Shift + T  colour theme
 
   ${C_BLUE}Config:${C_RESET} ~/.config/hypr/  (edits apply live)
   ${C_DIM}Re-run this script any time — it will only refresh what changed.${C_RESET}

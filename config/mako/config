@@ -12,10 +12,6 @@ layer=overlay
 
 # ── appearance ────────────────────────────────────────────────────────────────
 font=JetBrainsMono Nerd Font 11
-background-color=#1e1e2ee6
-text-color=#cdd6f4
-border-color=#cba6f7
-progress-color=over #45475a
 
 width=380
 height=160
@@ -39,22 +35,14 @@ on-button-middle=none
 on-button-right=dismiss-all
 on-touch=dismiss
 
-# ── per-urgency overrides ─────────────────────────────────────────────────────
-[urgency=low]
-border-color=#45475a
-text-color=#a6adc8
-default-timeout=4000
-
-[urgency=normal]
-border-color=#cba6f7
-
-[urgency=critical]
-border-color=#f38ba8
-background-color=#1e1e2ef2
-text-color=#f38ba8
-# Critical notifications stay until dismissed.
-default-timeout=0
+# ── colours and per-urgency overrides ─────────────────────────────────────────
+# mako has no variables, so the generated file carries the colours and every
+# section that sets one. It is written by hypr/scripts/theme.sh; SUPER+SHIFT+T
+# switches the theme. This include has to come before any section declared
+# here, because mako applies keys to whichever section was opened last.
+include=~/.config/mako/colors
 
 # Volume and brightness popups come from swayosd, so suppress duplicates.
+# The section header re-scopes after the include above.
 [app-name=swayosd]
 invisible=1

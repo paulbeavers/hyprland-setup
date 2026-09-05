@@ -1,12 +1,21 @@
 #!/usr/bin/env bash
 # Wallpaper picker — SUPER + W. Uses wofi so it matches the launcher.
 #
-# Lists the images in ~/Pictures/wallpapers, sets the pick on every output,
-# and rewrites hyprpaper.conf so the choice survives a restart.
+# Offers two sources: your own images in ~/Pictures/wallpapers, and the
+# wallpapers Hyprland ships in /usr/share/hypr (wall0-2). The system ones are
+# read in place rather than copied — they are 13-27MB each, and an update to
+# the hyprland package brings in whatever it ships next.
 #
 #     wallpaper.sh              open the picker
+#     wallpaper.sh --set <path> apply one image directly
 #     wallpaper.sh --random     set a random one, no menu (handy in autostart)
+#     wallpaper.sh --restore    re-apply the recorded choice (install time)
 #     wallpaper.sh --print      list what would be offered, one path per line
+#     wallpaper.sh --no-reload  write the configs but do not talk to hyprpaper
+#
+# The choice is recorded in ~/.config/hypr/.active-wallpaper. hyprpaper.conf and
+# hyprlock.conf are both rewritten from it, and both are files the installer
+# syncs, so --restore is how a re-run puts your pick back after the sync.
 #
 # Note: hyprpaper v0.8.4 rejects `preload`, `reload` and `unload` over hyprctl
 # — `wallpaper` is the only verb it accepts, and it loads the image itself, so
@@ -14,7 +23,11 @@
 set -euo pipefail
 
 WALLPAPER_DIR="${WALLPAPER_DIR:-$HOME/Pictures/wallpapers}"
+SYSTEM_DIR="${SYSTEM_WALLPAPER_DIR:-/usr/share/hypr}"
 HYPRPAPER_CONF="${HYPRPAPER_CONF:-$HOME/.config/hypr/hyprpaper.conf}"
+HYPRLOCK_CONF="${HYPRLOCK_CONF:-$HOME/.config/hypr/hyprlock.conf}"
+ACTIVE_FILE="${ACTIVE_WALLPAPER_FILE:-$HOME/.config/hypr/.active-wallpaper}"
+LIVE=1
 
 note() { command -v notify-send >/dev/null && notify-send -a Wallpaper "$@" || true; }
 
@@ -24,23 +37,56 @@ die() {
     exit 1
 }
 
-# Every image directly in WALLPAPER_DIR, sorted, NUL-safe so that spaces and
-# other awkward characters in a filename survive.
+FILES=()   # absolute paths
+LABELS=()  # what the menu shows, one per path, unique
+
+# Both sources, NUL-safe throughout so spaces and other awkward characters in a
+# filename survive. Labels are prefixed for the system set, which keeps them
+# unique even if you happen to have your own wall0.png.
 collect() {
-    [[ -d $WALLPAPER_DIR ]] || die "no such directory: $WALLPAPER_DIR"
-    mapfile -d '' -t FILES < <(
-        find -L "$WALLPAPER_DIR" -maxdepth 1 -type f \
-            \( -iname '*.png'  -o -iname '*.jpg' -o -iname '*.jpeg' \
-            -o -iname '*.webp' -o -iname '*.bmp' -o -iname '*.gif' \) \
-            -print0 | sort -z
-    )
-    [[ ${#FILES[@]} -gt 0 ]] || die "no images in $WALLPAPER_DIR"
+    local f
+    FILES=(); LABELS=()
+
+    if [[ -d $WALLPAPER_DIR ]]; then
+        while IFS= read -r -d '' f; do
+            FILES+=("$f"); LABELS+=("${f##*/}")
+        done < <(
+            find -L "$WALLPAPER_DIR" -maxdepth 1 -type f \
+                \( -iname '*.png'  -o -iname '*.jpg' -o -iname '*.jpeg' \
+                -o -iname '*.webp' -o -iname '*.bmp' -o -iname '*.gif' \) \
+                -print0 2>/dev/null | sort -z
+        )
+    fi
+
+    # Only wall*.png — /usr/share/hypr also holds lockdead*.png, which are the
+    # "you died" lock screens, not wallpapers.
+    if [[ -d $SYSTEM_DIR ]]; then
+        while IFS= read -r -d '' f; do
+            FILES+=("$f"); LABELS+=("Hyprland — ${f##*/}")
+        done < <(
+            find -L "$SYSTEM_DIR" -maxdepth 1 -type f -iname 'wall*.png' \
+                -print0 2>/dev/null | sort -z
+        )
+    fi
+
+    [[ ${#FILES[@]} -gt 0 ]] \
+        || die "no images in $WALLPAPER_DIR or $SYSTEM_DIR"
 }
 
 # Point hyprpaper at the image, then make it stick. Restarting the daemon is
 # the fallback for the very first run, when nothing is listening yet.
 apply() {
     local img="$1"
+    [[ -f $img ]] || die "no such image: $img"
+    persist "$img"
+    persist_lock "$img"
+    mkdir -p "${ACTIVE_FILE%/*}"
+    printf '%s\n' "$img" > "$ACTIVE_FILE"
+
+    # Writing the configs is the part that must always happen. Talking to the
+    # daemon is skipped under --no-reload, and during an install there is no
+    # session to talk to anyway.
+    [[ $LIVE -eq 1 ]] || return 0
     if ! hyprctl hyprpaper wallpaper ",$img" >/dev/null 2>&1; then
         pkill -x hyprpaper 2>/dev/null || true
         hyprpaper >/dev/null 2>&1 &
@@ -48,7 +94,6 @@ apply() {
         hyprctl hyprpaper wallpaper ",$img" >/dev/null 2>&1 \
             || die "hyprpaper would not accept $img"
     fi
-    persist "$img"
 }
 
 # Rewrite the preload/wallpaper lines in place, leaving the comments alone.
@@ -60,7 +105,7 @@ apply() {
 persist() {
     local img="$1" tmp
     [[ -w $HYPRPAPER_CONF ]] || return 0
-    tmp="$(mktemp)" || return 0
+    tmp="$(mktemp "${HYPRPAPER_CONF}.XXXXXX")" || return 0
     if awk -v img="$img" '
         /^[[:space:]]*preload[[:space:]]*=/ {
             if (!p) { print "preload = " img; p = 1 }
@@ -76,12 +121,46 @@ persist() {
             if (!w) print "wallpaper = , " img
         }
     ' "$HYPRPAPER_CONF" > "$tmp"; then
-        cat "$tmp" > "$HYPRPAPER_CONF"
+        chmod 644 "$tmp"; mv "$tmp" "$HYPRPAPER_CONF"
+    else
+        rm -f "$tmp"
     fi
-    rm -f "$tmp"
 }
 
+# Keep the lock screen on the same image. Only the `path` inside hyprlock's
+# background block is touched; everything else is left alone.
+persist_lock() {
+    local img="$1" tmp
+    [[ -w $HYPRLOCK_CONF ]] || return 0
+    tmp="$(mktemp "${HYPRLOCK_CONF}.XXXXXX")" || return 0
+    if awk -v img="$img" '
+        /^background[[:space:]]*\{/ { inbg = 1 }
+        inbg && /^[[:space:]]*path[[:space:]]*=/ {
+            print "    path = " img; next
+        }
+        inbg && /^\}/ { inbg = 0 }
+        { print }
+    ' "$HYPRLOCK_CONF" > "$tmp"; then
+        chmod 644 "$tmp"; mv "$tmp" "$HYPRLOCK_CONF"
+    else
+        rm -f "$tmp"
+    fi
+}
+
+# --no-reload can precede any other argument.
+if [[ ${1:-} == --no-reload ]]; then LIVE=0; shift; fi
+
 case "${1:-}" in
+    --set)
+        [[ -n ${2:-} ]] || die "--set needs an image path"
+        apply "$2"
+        ;;
+    --restore)
+        [[ -r $ACTIVE_FILE ]] || exit 0
+        img="$(<"$ACTIVE_FILE")"
+        [[ -n $img && -f $img ]] || exit 0
+        apply "$img"
+        ;;
     --print)
         collect
         printf '%s\n' "${FILES[@]}"
@@ -93,16 +172,17 @@ case "${1:-}" in
     "")
         collect
         current="$(hyprctl hyprpaper listactive 2>/dev/null | head -1 | cut -d' ' -f2- || true)"
-        # Basenames are unique inside one directory, so the menu can show them
-        # bare and the choice maps straight back to a path.
-        choice="$(printf '%s\n' "${FILES[@]##*/}" \
+        choice="$(printf '%s\n' "${LABELS[@]}" \
             | wofi --dmenu --prompt "Wallpaper${current:+ (${current##*/})}" \
                    --width 520 --height 420 --cache-file /dev/null --insensitive)" || exit 0
         [[ -n $choice ]] || exit 0
-        [[ -f "$WALLPAPER_DIR/$choice" ]] || die "no such image: $choice"
-        apply "$WALLPAPER_DIR/$choice"
+        # Labels are unique, so the first match is the right one.
+        for i in "${!LABELS[@]}"; do
+            if [[ ${LABELS[i]} == "$choice" ]]; then apply "${FILES[i]}"; exit 0; fi
+        done
+        die "no wallpaper named $choice"
         ;;
     *)
-        die "unknown option: $1 (try --random or --print)"
+        die "unknown option: $1 (try --set, --random, --restore or --print)"
         ;;
 esac

@@ -22,11 +22,12 @@
 # that single call is the whole apply path.
 set -euo pipefail
 
+CFG="${XDG_CONFIG_HOME:-$HOME/.config}"
 WALLPAPER_DIR="${WALLPAPER_DIR:-$HOME/Pictures/wallpapers}"
 SYSTEM_DIR="${SYSTEM_WALLPAPER_DIR:-/usr/share/hypr}"
-HYPRPAPER_CONF="${HYPRPAPER_CONF:-$HOME/.config/hypr/hyprpaper.conf}"
-HYPRLOCK_CONF="${HYPRLOCK_CONF:-$HOME/.config/hypr/hyprlock.conf}"
-ACTIVE_FILE="${ACTIVE_WALLPAPER_FILE:-$HOME/.config/hypr/.active-wallpaper}"
+HYPRPAPER_CONF="${HYPRPAPER_CONF:-$CFG/hypr/hyprpaper.conf}"
+HYPRLOCK_CONF="${HYPRLOCK_CONF:-$CFG/hypr/hyprlock.conf}"
+ACTIVE_FILE="${ACTIVE_WALLPAPER_FILE:-$CFG/hypr/.active-wallpaper}"
 LIVE=1
 
 note() { command -v notify-send >/dev/null && notify-send -a Wallpaper "$@" || true; }

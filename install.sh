@@ -802,6 +802,20 @@ EOF
         fi
     fi
 
+    # ── retire the legacy hyprlang config ─────────────────────────────────────
+    # Hyprland picks hyprland.lua over hyprland.conf, so a leftover .conf is
+    # inert — but on a machine upgrading from the old layout it is the previous
+    # config, and leaving it invites editing the file that no longer applies.
+    if [[ $DRY_RUN -eq 0 && -f "$CONFIG_DST/hypr/hyprland.conf" ]]; then
+        mkdir -p "$BACKUP_DIR/hypr"
+        for _legacy in hyprland env theme input keybinds rules autostart monitors gpu colors; do
+            [[ -f "$CONFIG_DST/hypr/${_legacy}.conf" ]] || continue
+            mv "$CONFIG_DST/hypr/${_legacy}.conf" "$BACKUP_DIR/hypr/${_legacy}.conf"
+        done
+        warn "moved the old .conf config to $BACKUP_DIR/hypr/"
+        info "  Hyprland 0.57 removes hyprlang; hyprland.lua replaces it"
+    fi
+
     # ── colour theme ──────────────────────────────────────────────────────────
     # Several configs are rendered rather than copied: waybar and wofi @import a
     # colors.css, hypr sources a colors.conf, kitty and mako include their own.
@@ -909,11 +923,11 @@ if [[ $DO_CONFIGS -eq 1 && $DRY_RUN -eq 0 ]]; then
     # Verify the Lua config parses without needing a running compositor. This
     # is the only check that catches a broken config before you log in.
     if command -v Hyprland >/dev/null; then
-        result="$(Hyprland --verify-config -c "$CONFIG_DST/hypr/init.lua" 2>&1 | tail -1)"
+        result="$(Hyprland --verify-config -c "$CONFIG_DST/hypr/hyprland.lua" 2>&1 | tail -1)"
         if [[ $result == *"config ok"* ]]; then
-            ok "init.lua parses"
+            ok "hyprland.lua parses"
         else
-            warn "init.lua has errors:"
+            warn "hyprland.lua has errors:"
             printf '%s\n' "$result" | sed 's/^/        /'
         fi
     fi

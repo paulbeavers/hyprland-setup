@@ -28,7 +28,7 @@ hl.env("HYPRCURSOR_THEME", "Adwaita")
 hl.env("HYPRCURSOR_SIZE", "24")
 
 -- Vendor-specific GPU variables are NOT set here; the installer detects the
--- hardware and writes gpu.lua, which init.lua requires.
+-- hardware and writes gpu.lua, which hyprland.lua requires.
 
 hl.env("EDITOR", "nvim")
 hl.env("VISUAL", "nvim")

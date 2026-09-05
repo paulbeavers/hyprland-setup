@@ -19,9 +19,25 @@
 --  Reference: https://wiki.hypr.land/Configuring/
 --------------------------------------------------------------------------------
 
-require("monitors")
+-- monitors.lua and gpu.lua are generated per machine by install.sh, so they do
+-- not exist until it has run. Live media has never run it, and a hard require
+-- there fails the whole config and drops Hyprland into emergency mode with no
+-- binds. Hyprland's own defaults are correct in that case: displays are
+-- auto-detected, and no vendor GPU variables are set.
+--
+-- Only a genuinely missing file is tolerated. An error *inside* one of these
+-- modules is re-raised, because silently ignoring a broken generated file
+-- would hide a real bug behind a working-looking desktop.
+local function optional(name)
+    local ok, err = pcall(require, name)
+    if ok then return end
+    if tostring(err):match("module '" .. name .. "' not found") then return end
+    error(err, 0)
+end
+
+optional("monitors")
 require("env")
-require("gpu")
+optional("gpu")
 require("theme")
 require("input")
 require("keybinds")

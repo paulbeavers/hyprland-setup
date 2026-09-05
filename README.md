@@ -153,6 +153,9 @@ Or straight from Hyprland: `hyprctl binds` (raw), `hyprctl -j binds` (JSON).
 | `SUPER + V` | Toggle floating |
 | `SUPER + 1..0` | Switch workspace |
 | `SUPER + SHIFT + 1..0` | Move window to workspace |
+| `SUPER + Tab` / `SUPER + SHIFT + Tab` | Next / previous workspace (wraps) |
+| `SUPER + T` | Toggle dwindle ⇄ scrolling layout |
+| `SUPER + -` / `SUPER + =` | Scrolling: narrower / wider column |
 | `SUPER + S` | Scratchpad |
 | `SUPER + R` | Resize mode (`hjkl`, Escape to exit) |
 | `SUPER + X` | Clipboard history |
@@ -170,6 +173,13 @@ Or straight from Hyprland: `hyprctl binds` (raw), `hyprctl -j binds` (JSON).
   is only applied where `RESOLUTION / SCALE` is a whole number, which Hyprland
   requires; on a display it does not divide (1366x768, 1600x900) the script
   falls back to scale 1 for that monitor and says so.
+- **Two tiling layouts.** `theme.conf` sets `general:layout` (dwindle by
+  default) and `SUPER + T` flips the running session between dwindle and
+  Hyprland's built-in scrolling layout — a PaperWM-style tape of columns.
+  Scrolling needs no plugin as of 0.56. The toggle is a runtime
+  `hyprctl keyword`, so `hyprctl reload` or a new session returns to the
+  `theme.conf` default; change that line to start in scrolling instead.
+  `SUPER + ALT + ...` binds drive the tape and do nothing under dwindle.
 - **`monitors.conf` is generated**, not shipped, so the layout matches the
   machine you install on. Re-run the installer after changing monitors, or use
   `nwg-displays` for a GUI.

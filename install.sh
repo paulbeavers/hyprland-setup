@@ -38,6 +38,13 @@ DEFAULT_SCALE_DEN=3
 # point. Must match a filename in config/hypr/themes/ without the extension.
 DEFAULT_THEME=catppuccin-mocha
 
+# Wallpaper applied on a first install, on the same terms as DEFAULT_THEME: a
+# re-run keeps whatever was last picked with SUPER+W. One of the images the
+# hyprland package ships, so nothing has to be generated or downloaded. If it
+# is missing — a hyprland release that ships a different set — the generated
+# gradient is used instead.
+DEFAULT_WALLPAPER=/usr/share/hypr/wall2.png
+
 # Set by --for-user. Normally this script runs as you and calls sudo; an
 # installer runs it as root inside a chroot, where there is no "you" and no
 # sudo to call. FOR_USER names the account the desktop is being set up for.
@@ -915,12 +922,26 @@ EOF
     fi
     # hyprpaper.conf and hyprlock.conf both name the current wallpaper, and both
     # were just overwritten by the config sync. Put the recorded pick back.
+    #
+    # --restore is a no-op when nothing has been picked yet, which is exactly
+    # the case on a first install — so the desktop came up with whatever the
+    # freshly synced hyprpaper.conf happened to name, and nothing had ever been
+    # applied. Fall back to a real image, and record it, so a new machine has a
+    # wallpaper the first time it is logged into.
     wall_script="$CONFIG_DST/hypr/scripts/wallpaper.sh"
+    active_file="$CONFIG_DST/hypr/.active-wallpaper"
     if [[ $DRY_RUN -eq 1 ]]; then
         info "[dry-run] would restore the recorded wallpaper"
-    elif [[ -x $wall_script ]] && "$wall_script" --no-reload --restore; then
-        [[ -r "$CONFIG_DST/hypr/.active-wallpaper" ]] \
-            && ok "restored $(basename "$(<"$CONFIG_DST/hypr/.active-wallpaper")")"
+    elif [[ ! -x $wall_script ]]; then
+        warn "wallpaper.sh is not executable; wallpaper left as configured"
+    elif [[ -r $active_file ]] && "$wall_script" --no-reload --restore; then
+        ok "restored $(basename "$(<"$active_file")")"
+    elif [[ -f $DEFAULT_WALLPAPER ]] && "$wall_script" --no-reload --set "$DEFAULT_WALLPAPER"; then
+        ok "set the default wallpaper ($(basename "$DEFAULT_WALLPAPER"))"
+    elif [[ -f $wallpaper ]] && "$wall_script" --no-reload --set "$wallpaper"; then
+        ok "set $(basename "$wallpaper")"
+    else
+        warn "no wallpaper could be set"
     fi
     info "SUPER+W picks between these and the wallpapers Hyprland ships in /usr/share/hypr"
 

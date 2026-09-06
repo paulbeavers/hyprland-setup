@@ -520,7 +520,17 @@ if [[ $RUN_SYSTEM -eq 1 ]]; then
         done
     fi
 
-    if systemctl --user enable pipewire.service pipewire-pulse.service wireplumber.service >/dev/null 2>&1; then
+    # `systemctl --user` talks to a session bus, which does not exist inside a
+    # chroot — and under --for-user it would enable the units for root anyway,
+    # not for the account being set up. --global writes the same symlinks into
+    # /etc/systemd/user, which applies to every user and needs no session.
+    if [[ -n $FOR_USER ]]; then
+        if run $SUDO systemctl --global enable pipewire.service pipewire-pulse.service wireplumber.service >/dev/null 2>&1; then
+            ok "PipeWire user services enabled for all users"
+        else
+            warn "PipeWire user services will start on first graphical login"
+        fi
+    elif systemctl --user enable pipewire.service pipewire-pulse.service wireplumber.service >/dev/null 2>&1; then
         ok "PipeWire user services enabled"
     else
         warn "PipeWire user services will start on first graphical login"
@@ -898,7 +908,15 @@ EOF
     info "SUPER+W picks between these and the wallpapers Hyprland ships in /usr/share/hypr"
 
     # GTK apps do not read Hyprland's config, so set the theme via gsettings.
-    if [[ $DRY_RUN -eq 0 ]] && command -v gsettings >/dev/null; then
+    #
+    # Skipped under --for-user: gsettings needs a D-Bus session bus, which a
+    # chroot has none of, so every call would fail silently into `|| true` and
+    # look like it worked. It is belt-and-braces anyway — gtk-3.0/settings.ini
+    # and gtk-4.0/settings.ini are deployed above and carry the same values,
+    # which is what actually themes the apps on first login.
+    if [[ -n $FOR_USER ]]; then
+        info "GTK defaults come from the deployed settings.ini (no session bus in a chroot)"
+    elif [[ $DRY_RUN -eq 0 ]] && command -v gsettings >/dev/null; then
         gsettings set org.gnome.desktop.interface gtk-theme    'Adwaita-dark' 2>/dev/null || true
         gsettings set org.gnome.desktop.interface icon-theme   'Papirus-Dark' 2>/dev/null || true
         gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark'  2>/dev/null || true

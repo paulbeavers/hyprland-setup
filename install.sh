@@ -14,7 +14,7 @@ set -Eeuo pipefail
 
 readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 readonly CONFIG_SRC="$SCRIPT_DIR/config"
-readonly CONFIG_DST="${XDG_CONFIG_HOME:-$HOME/.config}"
+CONFIG_DST="${XDG_CONFIG_HOME:-$HOME/.config}"
 readonly BACKUP_DIR="$HOME/.config-backup-$(date +%Y%m%d-%H%M%S)"
 
 # Default fractional scale for generated monitor lines. Hyprland requires the
@@ -37,6 +37,12 @@ DEFAULT_SCALE_DEN=3
 # picked with SUPER+SHIFT+T instead, so this only ever decides the starting
 # point. Must match a filename in config/hypr/themes/ without the extension.
 DEFAULT_THEME=catppuccin-mocha
+
+# Set by --for-user. Normally this script runs as you and calls sudo; an
+# installer runs it as root inside a chroot, where there is no "you" and no
+# sudo to call. FOR_USER names the account the desktop is being set up for.
+FOR_USER=""
+SUDO=sudo
 
 # ── options ───────────────────────────────────────────────────────────────────
 DO_PACKAGES=auto        # auto | yes | no  — "auto" skips when already provisioned
@@ -68,6 +74,9 @@ By default the script decides for itself what still needs doing:
   --no-gaming          Skip multilib, Steam, gamemode, 32-bit drivers.
   --no-bluetooth       Skip bluez/blueman.
   --no-greetd          Skip the login manager.
+  --for-user NAME      Run as root and configure the desktop for NAME instead
+                       of the invoking user. For installers running this inside
+                       a chroot, where sudo has nobody to ask for a password.
   -h, --help           Show this message.
 
 Changed configs are backed up to ~/.config-backup-<timestamp>/ before being
@@ -87,6 +96,7 @@ while [[ $# -gt 0 ]]; do
         --no-gaming)         DO_GAMING=0 ;;
         --no-bluetooth)      DO_BLUETOOTH=0 ;;
         --no-greetd)         DO_GREETD=0 ;;
+        --for-user)          FOR_USER="${2:-}"; shift ;;
         -h|--help)           usage; exit 0 ;;
         *) echo "Unknown option: $1" >&2; usage; exit 1 ;;
     esac
@@ -112,7 +122,20 @@ trap 'die "failed at line $LINENO: ${BASH_COMMAND}"' ERR
 # ── preflight ─────────────────────────────────────────────────────────────────
 step "Preflight checks"
 
-[[ $EUID -ne 0 ]] || die "Run this as your normal user, not root. It calls sudo where needed."
+if [[ -n $FOR_USER ]]; then
+    # Already root, so every sudo below is redundant and would fail anyway:
+    # inside a chroot there is no tty to prompt on.
+    [[ $EUID -eq 0 ]] || die "--for-user has to run as root."
+    SUDO=""
+    FOR_USER_HOME="$(awk -F: -v u="$FOR_USER" '$1==u{print $6}' /etc/passwd)"
+    [[ -n $FOR_USER_HOME ]] || die "no such user: $FOR_USER"
+    export HOME="$FOR_USER_HOME"
+    CONFIG_DST_OVERRIDE="$FOR_USER_HOME/.config"
+    info "configuring the desktop for $FOR_USER ($FOR_USER_HOME)"
+else
+    [[ $EUID -ne 0 ]] || die "Run this as your normal user, not root, or pass --for-user NAME."
+fi
+[[ -n ${CONFIG_DST_OVERRIDE:-} ]] && CONFIG_DST="$CONFIG_DST_OVERRIDE"
 [[ -f /etc/arch-release ]] || die "This script targets Arch Linux."
 command -v pacman >/dev/null || die "pacman not found."
 [[ -d "$CONFIG_SRC" ]] || die "config/ directory not found next to install.sh"
@@ -387,7 +410,7 @@ case "$DO_PACKAGES" in
 esac
 
 # Only ask for sudo if something actually needs root.
-if [[ $RUN_SYSTEM -eq 1 && $DRY_RUN -eq 0 ]]; then
+if [[ $RUN_SYSTEM -eq 1 && $DRY_RUN -eq 0 && -z $FOR_USER ]]; then
     info "requesting sudo (needed for pacman and systemd units)…"
     sudo -v || die "sudo is required."
     while true; do sudo -n true; sleep 50; kill -0 "$$" 2>/dev/null || exit; done 2>/dev/null &
@@ -412,10 +435,10 @@ if [[ $RUN_SYSTEM -eq 1 ]]; then
         if grep -qE "^\s*${key}" /etc/pacman.conf; then
             ok "$key already set"
         elif grep -qE "^#\s*${key}" /etc/pacman.conf; then
-            run sudo sed -i "s/^#\s*${key}.*/${line}/" /etc/pacman.conf
+            run $SUDO sed -i "s/^#\s*${key}.*/${line}/" /etc/pacman.conf
             ok "enabled $key"
         else
-            run sudo sed -i "/^\[options\]/a ${line}" /etc/pacman.conf
+            run $SUDO sed -i "/^\[options\]/a ${line}" /etc/pacman.conf
             ok "enabled $key"
         fi
     }
@@ -429,13 +452,13 @@ if [[ $RUN_SYSTEM -eq 1 ]]; then
             ok "multilib already enabled"
         else
             info "enabling [multilib] for 32-bit gaming libraries"
-            run sudo sed -i '/^#\[multilib\]/,/^#Include = .*mirrorlist/ s/^#//' /etc/pacman.conf
+            run $SUDO sed -i '/^#\[multilib\]/,/^#Include = .*mirrorlist/ s/^#//' /etc/pacman.conf
             ok "multilib enabled"
         fi
     fi
 
     step "Synchronising databases and updating the system"
-    run sudo pacman -Syu --noconfirm
+    run $SUDO pacman -Syu --noconfirm
     ok "system up to date"
 
     step "Installing packages"
@@ -443,7 +466,7 @@ if [[ $RUN_SYSTEM -eq 1 ]]; then
         ok "all ${#WANTED[@]} packages already installed"
     else
         info "${#MISSING_PKGS[@]} to install: ${MISSING_PKGS[*]}"
-        run sudo pacman -S --needed --noconfirm "${MISSING_PKGS[@]}"
+        run $SUDO pacman -S --needed --noconfirm "${MISSING_PKGS[@]}"
         ok "packages installed"
     fi
 
@@ -477,7 +500,7 @@ if [[ $RUN_SYSTEM -eq 1 ]]; then
             ( cd "$build_dir/paru" && makepkg -src --noconfirm )
             # pacman -U rather than makepkg -i, so replacing an older paru-bin
             # is an ordinary conflict resolution instead of an error.
-            run sudo pacman -U --noconfirm "$build_dir"/paru/paru-*.pkg.tar.*
+            run $SUDO pacman -U --noconfirm "$build_dir"/paru/paru-*.pkg.tar.*
             rm -rf "$build_dir"
             paru_works && ok "paru installed" || warn "paru built but still will not run"
         fi
@@ -490,7 +513,7 @@ if [[ $RUN_SYSTEM -eq 1 ]]; then
         for unit in "${PENDING_UNITS[@]}"; do
             # greetd is configured below; enable it only once that has happened.
             [[ $unit == greetd.service ]] && continue
-            run sudo systemctl enable "$unit"
+            run $SUDO systemctl enable "$unit"
             ok "enabled $unit"
         done
     fi
@@ -519,8 +542,8 @@ if [[ $RUN_SYSTEM -eq 1 ]]; then
         if [[ $DRY_RUN -eq 1 ]]; then
             info "[dry-run] would write /etc/greetd/config.toml"
         else
-            sudo install -d -m 755 /etc/greetd
-            sudo tee /etc/greetd/config.toml >/dev/null <<EOF
+            $SUDO install -d -m 755 /etc/greetd
+            $SUDO tee /etc/greetd/config.toml >/dev/null <<EOF
 # Managed by hyprland-setup/install.sh
 [terminal]
 vt = 1
@@ -529,12 +552,12 @@ vt = 1
 command = "tuigreet --remember --remember-user-session --asterisks --time --greeting 'Arch Linux' --cmd '${session_cmd}'"
 user = "greeter"
 EOF
-            sudo install -d -o greeter -g greeter -m 755 /var/cache/tuigreet 2>/dev/null || true
+            $SUDO install -d -o greeter -g greeter -m 755 /var/cache/tuigreet 2>/dev/null || true
             ok "wrote /etc/greetd/config.toml"
         fi
 
         unit_enabled greetd.service && ok "greetd.service already enabled" || {
-            run sudo systemctl enable greetd.service
+            run $SUDO systemctl enable greetd.service
             ok "enabled greetd.service"
         }
     fi
@@ -880,6 +903,14 @@ EOF
         gsettings set org.gnome.desktop.interface font-name    'Noto Sans 11' 2>/dev/null || true
         gsettings set org.gnome.desktop.interface cursor-theme 'Adwaita'      2>/dev/null || true
         ok "applied dark GTK defaults"
+    fi
+
+    # Under --for-user everything above was written as root. Hand it back, or
+    # the user logs into a desktop that cannot write its own config.
+    if [[ -n $FOR_USER && $DRY_RUN -eq 0 ]]; then
+        step "Handing files to $FOR_USER"
+        chown -R "$FOR_USER:$FOR_USER" "$FOR_USER_HOME"
+        ok "$FOR_USER_HOME"
     fi
 fi
 

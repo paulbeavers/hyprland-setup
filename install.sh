@@ -143,7 +143,11 @@ fi
 command -v pacman >/dev/null || die "pacman not found."
 [[ -d "$CONFIG_SRC" ]] || die "config/ directory not found next to install.sh"
 
-if ! ping -c1 -W3 archlinux.org >/dev/null 2>&1; then
+# A TCP connection, not a ping: ICMP is filtered on plenty of networks that
+# will happily serve packages, and what matters here is whether the mirrors can
+# be reached. This also exercises DNS, which a ping by IP would not. The rest of
+# the installer settled on the same test for the same reason.
+if ! timeout 5 bash -c 'exec 3<>/dev/tcp/archlinux.org/443' 2>/dev/null; then
     die "No network connectivity. Bring up networking first (nmtui / iwctl)."
 fi
 # $USER is not set inside arch-chroot, and `set -u` turns that into an abort
@@ -614,6 +618,16 @@ if [[ $DO_CONFIGS -eq 1 ]]; then
         if [[ $DRY_RUN -eq 0 ]]; then
             mkdir -p "$(dirname "$dst")"
             cp --preserve=mode "$src" "$dst"
+            # Set the mode rather than inherit it. A .sh here is run directly
+            # by a keybind, so it has to be executable whatever the copy came
+            # from — and media that strips modes is the normal case, not an
+            # odd one: mkarchiso lays the ISO payload down with
+            # --no-preserve=mode, so from install media every one of these
+            # arrives as 644 and every keybind that runs one does nothing at
+            # all, silently.
+            if [[ $src == *.sh ]]; then
+                chmod 755 "$dst"
+            fi
         fi
     done < <(find "$CONFIG_SRC" -type f -print0)
 
@@ -977,9 +991,24 @@ if [[ $DO_CONFIGS -eq 1 && $DRY_RUN -eq 0 ]]; then
     # Verify the Lua config parses without needing a running compositor. This
     # is the only check that catches a broken config before you log in.
     if command -v Hyprland >/dev/null; then
-        result="$(Hyprland --verify-config -c "$CONFIG_DST/hypr/hyprland.lua" 2>&1 | tail -1)"
+        # Advisory only, so it must not be able to fail the install. The
+        # verify needs no running compositor, but it still exits non-zero for
+        # reasons that have nothing to do with the config — no seat, no DRM
+        # device — which is the ordinary case inside a chroot. Without the
+        # guard, set -e and the ERR trap turn this warning into a failed
+        # install at the very last step, after everything has been written.
+        result="$(Hyprland --verify-config -c "$CONFIG_DST/hypr/hyprland.lua" 2>&1 | tail -1 || true)"
         if [[ $result == *"config ok"* ]]; then
             ok "hyprland.lua parses"
+        elif [[ -z ${XDG_RUNTIME_DIR:-} || $result == *XDG_RUNTIME_DIR* ]]; then
+            # --verify-config wants a runtime directory before it will read
+            # anything, and there is none inside a chroot. That is a fact about
+            # where this is running, not about the config — so do not call it
+            # an error. Installing from the ISO always lands here, and every
+            # install would otherwise end by telling the user their config is
+            # broken.
+            info "config not verified from here (no session); after logging in:"
+            info "    hyprctl configerrors"
         else
             warn "hyprland.lua has errors:"
             printf '%s\n' "$result" | sed 's/^/        /'

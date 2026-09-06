@@ -404,6 +404,12 @@ if [[ $DO_GAMING -eq 1 ]] && ! grep -qE '^\[multilib\]' /etc/pacman.conf; then
 fi
 
 info "packages:  ${#MISSING_PKGS[@]} of ${#WANTED[@]} missing"
+# Name them here, not only in the install step. When the install step is never
+# reached — no network, and nothing to reach it with — the count on its own
+# says something is wrong without saying what, and finding out afterwards means
+# reconstructing the package list by hand from a machine that has already
+# rebooted.
+[[ ${#MISSING_PKGS[@]} -gt 0 ]] && info "           ${MISSING_PKGS[*]}"
 info "services:  ${#PENDING_UNITS[@]} pending"
 [[ $DO_GREETD  -eq 1 ]] && info "greetd:    $( ((GREETD_CONFIGURED)) && echo configured || echo "not configured" )"
 [[ $DO_GAMING  -eq 1 ]] && info "multilib:  $( ((MULTILIB_READY))    && echo enabled    || echo disabled )"

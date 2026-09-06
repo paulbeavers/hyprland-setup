@@ -143,7 +143,9 @@ command -v pacman >/dev/null || die "pacman not found."
 if ! ping -c1 -W3 archlinux.org >/dev/null 2>&1; then
     die "No network connectivity. Bring up networking first (nmtui / iwctl)."
 fi
-ok "Arch Linux, network up, running as $USER"
+# $USER is not set inside arch-chroot, and `set -u` turns that into an abort
+# rather than an empty string. id -un always works.
+ok "Arch Linux, network up, running as ${FOR_USER:-$(id -un)}"
 [[ $DRY_RUN -eq 1 ]] && warn "dry run — nothing will be written"
 
 # ── GPU detection ─────────────────────────────────────────────────────────────

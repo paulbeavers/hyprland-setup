@@ -175,6 +175,53 @@ ok "Arch Linux, network up, running as ${FOR_USER:-$(id -un)}"
 GPU_VENDORS=()
 GPU_NAMES=()
 
+# ── Broadcom wireless ─────────────────────────────────────────────────────────
+# Some Broadcom cards need a driver the kernel does not carry, and the two
+# candidates cannot both drive the same card — loading the wrong one is the
+# classic way to end up with a laptop that has no wifi at all.
+#
+# The install medium ships both, because it cannot know where it will be
+# installed. This decides which one belongs on *this* machine, from the PCI ID.
+#
+#   wl   broadcom-wl-dkms, a proprietary module. The only thing that drives a
+#        BCM4360, which is the card in a 2013 retina MacBook Pro; brcmfmac
+#        does not support it.
+#   b43  in-kernel, needs b43-firmware. Handles the older BCM4331 in the
+#        non-retina models, and is preferable where it works, being open.
+#
+# Anything not listed is left alone: the in-kernel brcmfmac handles most
+# modern Broadcom parts without help, and interfering would break them.
+BCM_DRIVER=""
+BCM_NAME=""
+
+detect_broadcom_wifi() {
+    local dev vendor id
+    for dev in /sys/bus/pci/devices/*; do
+        [[ -r $dev/vendor && -r $dev/device ]] || continue
+        vendor="$(cat "$dev/vendor")"
+        [[ $vendor == 0x14e4 ]] || continue          # Broadcom
+        id="$(cat "$dev/device")"
+
+        case "$id" in
+            # BCM4360, BCM4352, BCM43602 — wl only.
+            0x43a0|0x43b1|0x43ba|0x43a3)
+                BCM_DRIVER=wl ;;
+            # BCM4331, BCM4322, BCM43224, BCM4312 — b43 with firmware.
+            0x4331|0x432b|0x4353|0x4315|0x4353)
+                BCM_DRIVER=b43 ;;
+            *)
+                continue ;;
+        esac
+
+        if command -v lspci >/dev/null; then
+            BCM_NAME="$(lspci -d "14e4:${id#0x}" 2>/dev/null | head -1 | cut -d: -f3- | sed 's/^ *//' || true)"
+        fi
+        [[ -n $BCM_NAME ]] || BCM_NAME="Broadcom device ${id#0x}"
+        return 0
+    done
+    return 0
+}
+
 detect_gpus() {
     local dev card vendor id
     for dev in /sys/class/drm/card*/device; do
@@ -232,6 +279,7 @@ kernel_headers() {
 }
 
 detect_gpus
+detect_broadcom_wifi
 
 # ── package sets ──────────────────────────────────────────────────────────────
 # Grouped by purpose so it is obvious what to drop for a leaner system.
@@ -334,6 +382,11 @@ WANTED=(
 [[ $DO_GREETD    -eq 1 ]] && WANTED+=( "${PKGS_GREETD[@]}" )
 [[ $DO_BLUETOOTH -eq 1 ]] && WANTED+=( "${PKGS_BLUETOOTH[@]}" )
 [[ $DO_GAMING    -eq 1 ]] && WANTED+=( "${PKGS_GAMING[@]}" )
+# The wireless driver this card needs, if it needs one the kernel lacks. On
+# install media both are already present; this is what makes a plain run of
+# this script on an existing Arch install fix the wifi too.
+[[ $BCM_DRIVER == wl  ]] && WANTED+=( broadcom-wl-dkms )
+[[ $BCM_DRIVER == b43 ]] && WANTED+=( b43-firmware )
 
 # ── package helpers ───────────────────────────────────────────────────────────
 # True when a package is installed. Also handles package groups (base-devel),
@@ -382,6 +435,7 @@ step "Assessing current state"
 for _i in "${!GPU_VENDORS[@]}"; do
     info "GPU:       ${GPU_VENDORS[$_i]}${GPU_NAMES[$_i]:+ — ${GPU_NAMES[$_i]}}"
 done
+[[ -n $BCM_DRIVER ]] && info "wireless:  $BCM_NAME — $BCM_DRIVER"
 
 MISSING_PKGS=()
 for p in "${WANTED[@]}"; do
@@ -497,6 +551,58 @@ if [[ $RUN_SYSTEM -eq 1 ]]; then
         require_network "installing packages"
         run $SUDO pacman -Syu --noconfirm
         ok "system up to date"
+    fi
+
+    # ── drivers this machine has no use for ───────────────────────────────────
+    # The install medium carries every vendor's driver, because it cannot know
+    # what it will be installed onto. Once that is known, the rest can go: an
+    # AMD laptop has no reason to keep 900MB of NVIDIA userspace, and a machine
+    # with no Broadcom card has no reason to keep two Broadcom drivers.
+    #
+    # Only ever removes what this script itself would have installed, and only
+    # what the detected hardware rules out. -Rn without the cascade: these are
+    # explicitly installed packages, and following their dependencies out would
+    # take shared libraries other things need.
+    step "Drivers not needed here"
+    unneeded=()
+
+    has_vendor() {
+        local want="$1" v
+        for v in ${GPU_VENDORS[@]+"${GPU_VENDORS[@]}"}; do
+            [[ $v == "$want" ]] && return 0
+        done
+        return 1
+    }
+
+    has_vendor nvidia || unneeded+=( nvidia-open-dkms nvidia-utils nvidia-settings
+                                     libva-nvidia-driver lib32-nvidia-utils )
+    has_vendor amd    || unneeded+=( vulkan-radeon lib32-vulkan-radeon )
+    has_vendor intel  || unneeded+=( vulkan-intel intel-media-driver lib32-vulkan-intel )
+
+    [[ $BCM_DRIVER == wl  ]] || unneeded+=( broadcom-wl-dkms )
+    [[ $BCM_DRIVER == b43 ]] || unneeded+=( b43-firmware )
+
+    # dkms and the kernel headers exist on the medium to build the two modules
+    # above. With neither in use they are 310MB of build tooling for nothing —
+    # and a plain Arch install would not have them unless something asked.
+    if ! has_vendor nvidia && [[ $BCM_DRIVER != wl ]]; then
+        unneeded+=( dkms linux-headers )
+    fi
+
+    present=()
+    for _p in "${unneeded[@]}"; do
+        pacman -Qq "$_p" &>/dev/null && present+=("$_p")
+    done
+
+    if [[ ${#present[@]} -eq 0 ]]; then
+        ok "nothing to remove"
+    elif [[ $DRY_RUN -eq 1 ]]; then
+        info "[dry-run] would remove ${#present[@]}: ${present[*]}"
+    else
+        info "removing ${#present[@]} not needed on this hardware"
+        info "    ${present[*]}"
+        run $SUDO pacman -Rn --noconfirm "${present[@]}" || warn "some could not be removed"
+        ok "removed"
     fi
 
     step "Installing packages"
@@ -764,6 +870,51 @@ if [[ $DO_CONFIGS -eq 1 ]]; then
             echo "-- snap to the nearest legal scale — set an explicit line for it above." >> "$monitors_conf"
             echo "hl.monitor({ output = \"\", mode = \"preferred\", position = \"auto\", scale = ${DEFAULT_SCALE} })" >> "$monitors_conf"
             ok "wrote monitors.lua for ${#connected[@]} display(s)"
+        fi
+    fi
+
+    # ── Broadcom wireless ─────────────────────────────────────────────────────
+    # Which driver owns the card is decided here, by keeping the others out of
+    # the kernel. Both are installed — the medium ships both because it cannot
+    # know the hardware — and if two of them can claim the same device, which
+    # one wins is a race that resolves differently between boots.
+    step "Wireless"
+    if [[ -z $BCM_DRIVER ]]; then
+        ok "no Broadcom card needing a driver the kernel does not have"
+    elif [[ $DRY_RUN -eq 1 ]]; then
+        info "[dry-run] would configure the $BCM_DRIVER driver for: $BCM_NAME"
+    else
+        bcm_conf=/etc/modprobe.d/starch-broadcom.conf
+        bcm_tmp="$(mktemp)"
+        {
+            echo "# Generated by hyprland-setup for: $BCM_NAME"
+            echo "# Rewritten only when the detected wireless hardware changes."
+            echo "#"
+            if [[ $BCM_DRIVER == wl ]]; then
+                echo "# This card is driven by the proprietary wl module. The in-kernel"
+                echo "# drivers claim the same device and must stay out of the way; bcma"
+                echo "# and ssb are the buses they attach through, so they go too."
+                printf 'blacklist %s\n' b43 bcma brcmsmac brcmfmac ssb
+            else
+                echo "# This card is driven by the in-kernel b43, which needs the firmware"
+                echo "# from b43-firmware. wl would claim the same device if it loaded."
+                printf 'blacklist %s\n' wl brcmsmac brcmfmac
+            fi
+        } > "$bcm_tmp"
+
+        if [[ -f $bcm_conf ]] && cmp -s "$bcm_tmp" "$bcm_conf"; then
+            ok "$BCM_DRIVER already configured for $BCM_NAME"
+        else
+            run $SUDO install -Dm644 "$bcm_tmp" "$bcm_conf"
+            ok "$BCM_DRIVER selected for $BCM_NAME"
+            info "a reboot is needed before wireless works"
+        fi
+        rm -f "$bcm_tmp"
+
+        # Load it now as well as at boot, so a card that was not working
+        # starts working without waiting for the reboot where possible.
+        if [[ $BCM_DRIVER == wl ]] && [[ -z $FOR_USER ]]; then
+            run $SUDO modprobe wl 2>/dev/null || true
         fi
     fi
 

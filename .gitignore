@@ -7,8 +7,9 @@
 # Nothing generated lands in this repo — monitors.conf and gpu.conf are written
 # straight into ~/.config/hypr by install.sh, deliberately kept out of version
 # control because they are machine-specific.
-# ISO build artifacts. work/ is created by mkarchiso under sudo and is
-# root-owned, so git cannot even index it; out/ holds multi-GB images.
-iso/work/
-iso/work-assemble/
-iso/out/
+
+# Leftover ISO build output. The ISO tooling now lives in the starch repository;
+# these directories are what an earlier in-tree build left behind, they are
+# root-owned (mkarchiso runs under sudo) and git cannot even index them.
+# Safe to delete with: sudo rm -rf iso/
+iso/

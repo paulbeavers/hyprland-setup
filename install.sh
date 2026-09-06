@@ -150,13 +150,18 @@ fi
 command -v pacman >/dev/null || die "pacman not found."
 [[ -d "$CONFIG_SRC" ]] || die "config/ directory not found next to install.sh"
 
-# A TCP connection, not a ping: ICMP is filtered on plenty of networks that
-# will happily serve packages, and what matters here is whether the mirrors can
-# be reached. This also exercises DNS, which a ping by IP would not. The rest of
-# the installer settled on the same test for the same reason.
-if ! timeout 5 bash -c 'exec 3<>/dev/tcp/archlinux.org/443' 2>/dev/null; then
-    die "No network connectivity. Bring up networking first (nmtui / iwctl)."
-fi
+# Connectivity is checked where it is needed, not here — see require_network.
+# A run with nothing to download does not need a network, and demanding one
+# anyway is the difference between an install that works on a train and one
+# that does not.
+#
+# A TCP connection rather than a ping: ICMP is filtered on plenty of networks
+# that will happily serve packages, and what matters is whether the mirrors can
+# be reached. It exercises DNS too, which a ping by IP would not.
+require_network() {
+    timeout 5 bash -c 'exec 3<>/dev/tcp/archlinux.org/443' 2>/dev/null && return 0
+    die "No network connectivity, and $1 needs it. Connect first (nmtui / iwctl)."
+}
 # $USER is not set inside arch-chroot, and `set -u` turns that into an abort
 # rather than an empty string. id -un always works.
 ok "Arch Linux, network up, running as ${FOR_USER:-$(id -un)}"
@@ -473,9 +478,20 @@ if [[ $RUN_SYSTEM -eq 1 ]]; then
         fi
     fi
 
-    step "Synchronising databases and updating the system"
-    run $SUDO pacman -Syu --noconfirm
-    ok "system up to date"
+    # Only sync when something actually has to come down the wire. Installing
+    # from the ISO leaves every package already present, and the system phase
+    # still runs — the services need enabling, and that needs no network.
+    # Syncing anyway would make an otherwise entirely offline install fail on a
+    # machine that has not been connected yet.
+    if [[ ${#MISSING_PKGS[@]} -eq 0 && $DO_AUR -eq 0 && $DO_GAMING -eq 0 ]]; then
+        step "Packages"
+        ok "all ${#WANTED[@]} already installed; nothing to download"
+    else
+        step "Synchronising databases and updating the system"
+        require_network "installing packages"
+        run $SUDO pacman -Syu --noconfirm
+        ok "system up to date"
+    fi
 
     step "Installing packages"
     if [[ ${#MISSING_PKGS[@]} -eq 0 ]]; then
@@ -488,6 +504,7 @@ if [[ $RUN_SYSTEM -eq 1 ]]; then
 
     if [[ $DO_AUR -eq 1 ]]; then
         step "AUR helper (paru)"
+        require_network "building paru"
 
         # Ask paru to run rather than merely checking it is on $PATH. paru links
         # libalpm, whose soname pacman bumps on major releases; a paru built

@@ -48,7 +48,8 @@ SUDO=sudo
 DO_PACKAGES=auto        # auto | yes | no  — "auto" skips when already provisioned
 DO_CONFIGS=1
 DO_AUR=0            # opt-in: nothing this script installs comes from the AUR
-DO_GAMING=1
+DO_GAMING=0            # opt-in: Steam and the 32-bit stack are a large,
+                       # opinionated addition, and one command to add later
 DO_BLUETOOTH=1
 DO_GREETD=1
 REDETECT_MONITORS=0
@@ -71,7 +72,8 @@ By default the script decides for itself what still needs doing:
 
   --aur                Also build paru, an AUR helper. Off by default: every
                        package this script installs is in the official repos.
-  --no-gaming          Skip multilib, Steam, gamemode, 32-bit drivers.
+  --gaming             Also enable multilib and install Steam, gamemode,
+                       mangohud and the 32-bit drivers. Off by default.
   --no-bluetooth       Skip bluez/blueman.
   --no-greetd          Skip the login manager.
   --for-user NAME      Run as root and configure the desktop for NAME instead
@@ -93,7 +95,8 @@ while [[ $# -gt 0 ]]; do
         --dry-run)           DRY_RUN=1 ;;
         --aur)               DO_AUR=1 ;;
         --no-aur)            DO_AUR=0 ;;   # kept: it used to be the default
-        --no-gaming)         DO_GAMING=0 ;;
+        --gaming)            DO_GAMING=1 ;;
+        --no-gaming)         DO_GAMING=0 ;;   # kept: it used to be the default
         --no-bluetooth)      DO_BLUETOOTH=0 ;;
         --no-greetd)         DO_GREETD=0 ;;
         --for-user)          FOR_USER="${2:-}"; shift ;;

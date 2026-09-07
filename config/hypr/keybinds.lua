@@ -213,3 +213,19 @@ hl.define_submap("resize", function()
 end)
 
 bind(mod .. " + R", hl.dsp.submap("resize"), "Resize mode (hjkl, Esc exits)")
+
+-- A "passthrough mode", for virtual machines and nested compositors. Hyprland
+-- claims SUPER before any window sees it, so a guest running its own Hyprland
+-- never receives SUPER+Return and its keybinds look broken. This submap defines
+-- exactly one binding — the one that leaves it — so every other key, SUPER
+-- combinations included, falls through to the focused window.
+--
+-- F12 because a guest is unlikely to want it, and because it stays reachable
+-- once the guest has swallowed everything else.
+hl.define_submap("passthrough", function()
+    hl.bind(mod .. " + F12", hl.dsp.submap("reset"),
+        { description = "Leave passthrough mode" })
+end)
+
+bind(mod .. " + F12", hl.dsp.submap("passthrough"),
+     "Passthrough mode (keys go to the VM; SUPER+F12 again to leave)")

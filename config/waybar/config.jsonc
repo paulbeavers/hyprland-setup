@@ -19,7 +19,12 @@
   // ── left ────────────────────────────────────────────────────────────────
   "hyprland/workspaces": {
     "format": "{icon}",
-    "on-click": "activate",
+    // No on-click here. In waybar, on-click is "command to execute when
+    // clicked" — a shell command, not an action name. Setting it to "activate"
+    // is a sway/workspaces idiom; on hyprland/workspaces it replaces the
+    // module's own click handler with an attempt to run a program called
+    // "activate", so clicking a workspace silently did nothing at all.
+    // Left unset, the module switches workspace on click, which is the point.
     // Scrolling over the workspace list moves between them.
     "on-scroll-up": "hyprctl dispatch workspace m-1",
     "on-scroll-down": "hyprctl dispatch workspace m+1",

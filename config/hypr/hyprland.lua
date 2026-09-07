@@ -44,6 +44,11 @@ require("keybinds")
 require("rules")
 require("autostart")
 
+-- Only present on install media, where it starts the installer and puts a
+-- welcome window up. An installed system has no such file and skips it, which
+-- is exactly what optional() is for.
+optional("live")
+
 hl.config({
     misc = {
         -- The Hyprland logo wallpaper and the "how to configure" banner.

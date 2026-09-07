@@ -3,14 +3,30 @@
 Turns a fresh Arch Linux install into a working Hyprland desktop, and keeps the
 result editable rather than magic.
 
+## On a new machine
+
+Start from a fresh Arch install with a network connection and an ordinary user
+account in `wheel`. Run it as that user, not as root — it calls `sudo` itself,
+for the few steps that need it.
+
 ```bash
-git clone <this repo> ~/hyprland-setup   # or copy the folder over
+sudo pacman -S --needed git
+git clone https://github.com/paulbeavers/hyprland-setup.git ~/hyprland-setup
 cd ~/hyprland-setup
 ./install.sh
 sudo reboot
 ```
 
-Re-running is safe and cheap — see **Re-running** below.
+That installs the packages, enables the services, writes the config into
+`~/.config`, detects the displays and the GPU, and installs `starch-config`.
+It takes a while on a cold pacman cache, and asks for your password once.
+
+`--dry-run` shows what it would do and writes nothing. Re-running afterwards is
+safe and cheap — see **Re-running** below.
+
+If you would rather not build a machine by hand, the [starch](https://github.com/paulbeavers/starch)
+ISO installs all of this and then removes itself, leaving a plain Arch system
+with this desktop on it.
 
 ## Re-running
 
@@ -25,7 +41,7 @@ already in place and becomes a fast config sync:
     ✓ system already provisioned — this run only refreshes configs
 
 ==> Syncing configuration files
-    updated  hypr/theme.conf
+    updated  hypr/theme.lua
     ✓ 0 added, 1 updated, 19 unchanged
 ```
 
@@ -37,10 +53,10 @@ It compares file by file, so:
 - only files that actually changed are backed up, into
   `~/.config-backup-<timestamp>/` with their paths preserved
 - files that exist only in `~/.config` are never deleted
-- **`monitors.conf` is left alone**, so a hand-tuned display layout
+- **`monitors.lua` is left alone**, so a hand-tuned display layout
   survives a re-run (`--redetect-monitors` rebuilds it)
 - sudo is only requested if something genuinely needs root
-- `gpu.conf` carries no timestamp on purpose: its content is a pure function of
+- `gpu.lua` carries no timestamp on purpose: its content is a pure function of
   the detected hardware, so it is rewritten only when the GPU actually changes
 
 Use `--dry-run` to see what would change without writing anything.
@@ -52,7 +68,7 @@ Use `--dry-run` to see what would change without writing anything.
 | `--configs-only` | Never touch packages or services |
 | `--packages-only` | Never touch dotfiles |
 | `--force-packages` | Re-run the package and service steps even if complete |
-| `--redetect-monitors` | Regenerate `monitors.conf` from connected displays |
+| `--redetect-monitors` | Regenerate `monitors.lua` from connected displays |
 | `--dry-run` | Show what would change; write nothing |
 | `--aur` | Also build `paru`, an AUR helper (off by default) |
 | `--no-gaming` | Skip multilib, Steam, gamemode, 32-bit drivers |
@@ -73,10 +89,10 @@ The script reads the PCI vendor ID from `/sys/class/drm/card*/device/vendor`
 | Unknown | `vulkan-swrast` (software) | — |
 
 Hybrid systems (Intel iGPU + NVIDIA dGPU) get both, plus a note in
-`gpu.conf` about `AQ_DRM_DEVICES` for choosing the render GPU.
+`gpu.lua` about `AQ_DRM_DEVICES` for choosing the render GPU.
 
 The matching environment variables are written to a generated
-`~/.config/hypr/gpu.conf` — `AMD_VULKAN_ICD`/`radeonsi` for AMD, `iHD` for
+`~/.config/hypr/gpu.lua` — `AMD_VULKAN_ICD`/`radeonsi` for AMD, `iHD` for
 Intel, `__GLX_VENDOR_LIBRARY_NAME`/`NVD_BACKEND` for NVIDIA. Nothing
 vendor-specific is hardcoded in the shipped configs.
 
@@ -108,29 +124,44 @@ vendor-specific is hardcoded in the shipped configs.
 
 ## Layout
 
+The Hyprland configuration is Lua. 0.55 deprecated the hyprlang `.conf`
+format and 0.57 removes it; the files that are still `.conf` below belong to
+other programs, which have their own formats.
+
 ```
 config/hypr/
-  hyprland.conf    variables + sources everything else
-  monitors.conf    GENERATED at install time from your connected displays
-  env.conf         environment variables
-  theme.conf       colours, gaps, borders, blur, animations
-  input.conf       keyboard, mouse, touchpad, gestures
-  keybinds.conf    every shortcut
-  rules.conf       window / layer / workspace rules
-  autostart.conf   what launches at login
-  hyprlock.conf    lock screen
-  hypridle.conf    idle timeouts
-  hyprpaper.conf   wallpaper
-  scripts/         power menu, keybind cheatsheet
+  hyprland.lua     requires everything else, in order
+  env.lua          environment variables
+  theme.lua        gaps, borders, blur, animations
+  input.lua        keyboard, mouse, touchpad, gestures
+  keybinds.lua     every shortcut
+  rules.lua        window / layer / workspace rules
+  autostart.lua    what launches at login
+  programs.lua     which terminal, browser, editor and launcher to use
+  themes/          the palettes SUPER+SHIFT+T switches between
+  scripts/         theme, wallpaper, power menu, cheatsheet, clipboard,
+                   layout toggle, keyboard backlight
+
+  hyprlock.conf    lock screen        (hyprlock's own format)
+  hypridle.conf    idle timeouts      (hypridle's own format)
+  hyprpaper.conf   wallpaper          (hyprpaper's own format)
+
+generated, never shipped:
+  monitors.lua     written at install time from your connected displays
+  gpu.lua          written from the card that was detected
+  colors.lua       written by scripts/theme.sh from the active palette
+  settings.lua     written by starch-config; loaded last, so it wins
 ```
 
-Hyprland reloads on save — no restart needed.
+Hyprland reloads on save — no restart needed. Check a change with
+`hyprctl configerrors`, or before logging in with
+`Hyprland --verify-config`.
 
 ## Keys
 
 `SUPER + /` shows a live cheatsheet in wofi, read straight from the running
 compositor via `hyprctl binds` — so it can never drift out of sync with
-`keybinds.conf`. It groups submap binds separately, since those only work
+`keybinds.lua`. It groups submap binds separately, since those only work
 inside that mode.
 
 For a terminal dump instead of the popup:
@@ -171,17 +202,17 @@ Or straight from Hyprland: `hyprctl binds` (raw), `hyprctl -j binds` (JSON).
 
 - **Config syntax targets Hyprland 0.56+.** The window-rule syntax changed in
   0.56 (`windowrulev2` is now a hard error) and gestures changed in 0.51.
-  `rules.conf` and `input.conf` use the current forms.
+  `rules.lua` and `input.lua` use the current forms.
 - **Default scale is 1.6** (`DEFAULT_SCALE` at the top of `install.sh`). A scale
   is only applied where `RESOLUTION / SCALE` is a whole number, which Hyprland
   requires; on a display it does not divide (1366x768, 1600x900) the script
   falls back to scale 1 for that monitor and says so.
-- **Two tiling layouts.** `theme.conf` sets `general:layout` (dwindle by
+- **Two tiling layouts.** `theme.lua` sets `general:layout` (dwindle by
   default) and `SUPER + T` flips the running session between dwindle and
   Hyprland's built-in scrolling layout — a PaperWM-style tape of columns.
   Scrolling needs no plugin as of 0.56. The toggle is a runtime
   `hyprctl keyword`, so `hyprctl reload` or a new session returns to the
-  `theme.conf` default; change that line to start in scrolling instead.
+  `theme.lua` default; change that line to start in scrolling instead.
   `SUPER + ALT + ...` binds drive the tape and do nothing under dwindle.
 - **`starch-config` is the settings app.** `SUPER + I`, or "Settings" in the
   launcher. It covers display scale, resolution and refresh; the idle timeouts
@@ -212,7 +243,7 @@ Or straight from Hyprland: `hyprctl binds` (raw), `hyprctl -j binds` (JSON).
   work at all. The window actions that used to sit on those keys moved to
   `SUPER + CTRL + C` and `SUPER + CTRL + V`. A terminal launched with a custom
   `--class` will not be recognised; add it to `TERMINALS` in the script.
-- **`monitors.conf` is generated**, not shipped, so the layout matches the
+- **`monitors.lua` is generated**, not shipped, so the layout matches the
   machine you install on. Re-run the installer after changing monitors, or use
   `nwg-displays` for a GUI.
 - **Not every window-rule effect is a boolean.** `idle_inhibit` takes a mode

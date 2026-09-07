@@ -45,4 +45,8 @@ class="$(hyprctl activewindow -j 2>/dev/null | jq -r '.class // ""')"
 # No focused window means nothing to send to.
 [[ -n $class ]] || exit 0
 
-hyprctl dispatch sendshortcut "$(shortcut_for "$class"), $key, activewindow" >/dev/null
+# Lua, not the legacy `dispatch sendshortcut MOD, key, window`: with a Lua
+# config Hyprland parses everything after `dispatch` as Lua, and the old form
+# is a syntax error that fails without a word. Leaving `window` out means the
+# focused window, which is what we want.
+hyprctl dispatch "hl.dsp.send_shortcut({ mods = '$(shortcut_for "$class")', key = '$key' })" >/dev/null

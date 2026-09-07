@@ -182,6 +182,16 @@ Or straight from Hyprland: `hyprctl binds` (raw), `hyprctl -j binds` (JSON).
   `hyprctl keyword`, so `hyprctl reload` or a new session returns to the
   `theme.conf` default; change that line to start in scrolling instead.
   `SUPER + ALT + ...` binds drive the tape and do nothing under dwindle.
+- **`hyprctl dispatch` speaks Lua here, and that breaks other people's tools.**
+  With a Lua config Hyprland evaluates everything after `dispatch` as Lua, so
+  `hyprctl dispatch workspace 3` is a syntax error, not a workspace switch —
+  and a failed dispatch is silent. Every call in this repo uses the Lua form
+  (`hyprctl dispatch 'hl.dsp.focus({ workspace = 3 })'`); `hyprctl repl` will
+  show you what is available under `hl.dsp`. The catch is third-party programs
+  that send the old strings and cannot be told otherwise. Waybar's
+  `hyprland/workspaces` is one, which is why the bar draws its workspace row
+  out of ten custom modules instead — see `waybar/config.jsonc`. Anything else
+  you add that "does nothing when clicked" is worth checking here first.
 - **Mac-style copy and paste.** `SUPER + C` and `SUPER + V` are bound to
   `clipboard.sh`, which looks at the focused window's class and forwards the
   shortcut that application actually understands: `Ctrl+Shift+C/V` in a

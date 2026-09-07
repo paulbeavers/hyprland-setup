@@ -55,3 +55,33 @@ hl.on("hyprland.start", function()
     -- Set the cursor explicitly so XWayland apps do not fall back to X11's.
     hl.exec_cmd("hyprctl setcursor Adwaita 24")
 end)
+
+--------------------------------------------------------------------------------
+--  Keep the workspace row in the bar current
+--
+--  The bar draws workspaces with ten custom modules instead of waybar's
+--  hyprland/workspaces, because that module cannot switch workspaces on a
+--  Lua-configured Hyprland — see waybar/config.jsonc for the whole story. A
+--  custom module only refreshes when told to, and SIGRTMIN+1 is what tells it
+--  (every one of the ten carries "signal": 1).
+--
+--  Doing it from here rather than from a daemon tailing the event socket means
+--  no extra process, and no socat: the compositor already knows, so it can just
+--  say so.
+--------------------------------------------------------------------------------
+
+local function refresh_workspaces()
+    hl.exec_cmd("pkill -RTMIN+1 waybar")
+end
+
+for _, event in ipairs({
+    "workspace.active",
+    "workspace.created",
+    "workspace.removed",
+    "window.open",
+    "window.close",
+    "window.urgent",
+    "monitor.focused",
+}) do
+    hl.on(event, refresh_workspaces)
+end

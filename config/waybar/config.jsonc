@@ -11,32 +11,48 @@
   "margin-left": 10,
   "margin-right": 10,
 
-  "modules-left":   ["hyprland/workspaces", "hyprland/submap", "hyprland/window"],
+  "modules-left":   ["group/workspaces", "hyprland/submap", "hyprland/window"],
   "modules-center": ["clock"],
   "modules-right":  ["tray", "privacy", "idle_inhibitor", "pulseaudio", "bluetooth",
                      "network", "cpu", "memory", "temperature", "battery", "custom/power"],
 
   // ── left ────────────────────────────────────────────────────────────────
-  "hyprland/workspaces": {
-    "format": "{icon}",
-    // No on-click here. In waybar, on-click is "command to execute when
-    // clicked" — a shell command, not an action name. Setting it to "activate"
-    // is a sway/workspaces idiom; on hyprland/workspaces it replaces the
-    // module's own click handler with an attempt to run a program called
-    // "activate", so clicking a workspace silently did nothing at all.
-    // Left unset, the module switches workspace on click, which is the point.
-    // Scrolling over the workspace list moves between them.
-    "on-scroll-up": "hyprctl dispatch workspace m-1",
-    "on-scroll-down": "hyprctl dispatch workspace m+1",
-    "sort-by-number": true,
-    "format-icons": {
-      "1": "1", "2": "2", "3": "3", "4": "4", "5": "5",
-      "6": "6", "7": "7", "8": "8", "9": "9", "10": "10",
-      "urgent": "",
-      "default": ""
-    },
-    "persistent-workspaces": { "*": 5 }
+  // Waybar's own hyprland/workspaces module cannot switch workspaces when
+  // Hyprland is configured in Lua. It hardcodes the IPC request
+  //
+  //     dispatch workspace 3
+  //
+  // and a Lua-configured Hyprland evaluates everything after `dispatch` as
+  // Lua, where `hl.dispatch(workspace 3)` is a syntax error. The click is
+  // swallowed and nothing is logged. Waybar offers no way to change the string
+  // it sends, so the row is drawn here instead, one custom module per
+  // workspace, each with an on-click that speaks Lua.
+  //
+  // Modules 6-10 print nothing while their workspace is empty, and waybar
+  // hides a custom module with empty text — so the row still grows only as far
+  // as you have used it, the way persistent-workspaces used to make it.
+  //
+  // They all carry signal 1: hypr/autostart.lua sends SIGRTMIN+1 to waybar
+  // whenever a workspace or window changes, which re-runs all ten at once.
+  //
+  // Scroll is repeated on every module rather than set once on the group: a
+  // group declaring on-scroll never sees the event, because the child modules
+  // are what the pointer is actually over.
+  "group/workspaces": {
+    "orientation": "horizontal",
+    "modules": ["custom/ws1", "custom/ws2", "custom/ws3", "custom/ws4", "custom/ws5", "custom/ws6", "custom/ws7", "custom/ws8", "custom/ws9", "custom/ws10"]
   },
+
+  "custom/ws1": { "on-scroll-up": "hyprctl dispatch 'hl.dsp.focus({ workspace = \"m-1\" })'", "on-scroll-down": "hyprctl dispatch 'hl.dsp.focus({ workspace = \"m+1\" })'", "exec": "~/.config/waybar/scripts/workspace.sh 1", "return-type": "json", "interval": "once", "signal": 1, "tooltip": false, "on-click": "hyprctl dispatch 'hl.dsp.focus({ workspace = 1 })'" },
+  "custom/ws2": { "on-scroll-up": "hyprctl dispatch 'hl.dsp.focus({ workspace = \"m-1\" })'", "on-scroll-down": "hyprctl dispatch 'hl.dsp.focus({ workspace = \"m+1\" })'", "exec": "~/.config/waybar/scripts/workspace.sh 2", "return-type": "json", "interval": "once", "signal": 1, "tooltip": false, "on-click": "hyprctl dispatch 'hl.dsp.focus({ workspace = 2 })'" },
+  "custom/ws3": { "on-scroll-up": "hyprctl dispatch 'hl.dsp.focus({ workspace = \"m-1\" })'", "on-scroll-down": "hyprctl dispatch 'hl.dsp.focus({ workspace = \"m+1\" })'", "exec": "~/.config/waybar/scripts/workspace.sh 3", "return-type": "json", "interval": "once", "signal": 1, "tooltip": false, "on-click": "hyprctl dispatch 'hl.dsp.focus({ workspace = 3 })'" },
+  "custom/ws4": { "on-scroll-up": "hyprctl dispatch 'hl.dsp.focus({ workspace = \"m-1\" })'", "on-scroll-down": "hyprctl dispatch 'hl.dsp.focus({ workspace = \"m+1\" })'", "exec": "~/.config/waybar/scripts/workspace.sh 4", "return-type": "json", "interval": "once", "signal": 1, "tooltip": false, "on-click": "hyprctl dispatch 'hl.dsp.focus({ workspace = 4 })'" },
+  "custom/ws5": { "on-scroll-up": "hyprctl dispatch 'hl.dsp.focus({ workspace = \"m-1\" })'", "on-scroll-down": "hyprctl dispatch 'hl.dsp.focus({ workspace = \"m+1\" })'", "exec": "~/.config/waybar/scripts/workspace.sh 5", "return-type": "json", "interval": "once", "signal": 1, "tooltip": false, "on-click": "hyprctl dispatch 'hl.dsp.focus({ workspace = 5 })'" },
+  "custom/ws6": { "on-scroll-up": "hyprctl dispatch 'hl.dsp.focus({ workspace = \"m-1\" })'", "on-scroll-down": "hyprctl dispatch 'hl.dsp.focus({ workspace = \"m+1\" })'", "exec": "~/.config/waybar/scripts/workspace.sh 6", "return-type": "json", "interval": "once", "signal": 1, "tooltip": false, "on-click": "hyprctl dispatch 'hl.dsp.focus({ workspace = 6 })'" },
+  "custom/ws7": { "on-scroll-up": "hyprctl dispatch 'hl.dsp.focus({ workspace = \"m-1\" })'", "on-scroll-down": "hyprctl dispatch 'hl.dsp.focus({ workspace = \"m+1\" })'", "exec": "~/.config/waybar/scripts/workspace.sh 7", "return-type": "json", "interval": "once", "signal": 1, "tooltip": false, "on-click": "hyprctl dispatch 'hl.dsp.focus({ workspace = 7 })'" },
+  "custom/ws8": { "on-scroll-up": "hyprctl dispatch 'hl.dsp.focus({ workspace = \"m-1\" })'", "on-scroll-down": "hyprctl dispatch 'hl.dsp.focus({ workspace = \"m+1\" })'", "exec": "~/.config/waybar/scripts/workspace.sh 8", "return-type": "json", "interval": "once", "signal": 1, "tooltip": false, "on-click": "hyprctl dispatch 'hl.dsp.focus({ workspace = 8 })'" },
+  "custom/ws9": { "on-scroll-up": "hyprctl dispatch 'hl.dsp.focus({ workspace = \"m-1\" })'", "on-scroll-down": "hyprctl dispatch 'hl.dsp.focus({ workspace = \"m+1\" })'", "exec": "~/.config/waybar/scripts/workspace.sh 9", "return-type": "json", "interval": "once", "signal": 1, "tooltip": false, "on-click": "hyprctl dispatch 'hl.dsp.focus({ workspace = 9 })'" },
+  "custom/ws10": { "on-scroll-up": "hyprctl dispatch 'hl.dsp.focus({ workspace = \"m-1\" })'", "on-scroll-down": "hyprctl dispatch 'hl.dsp.focus({ workspace = \"m+1\" })'", "exec": "~/.config/waybar/scripts/workspace.sh 10", "return-type": "json", "interval": "once", "signal": 1, "tooltip": false, "on-click": "hyprctl dispatch 'hl.dsp.focus({ workspace = 10 })'" },
 
   "hyprland/submap": {
     "format": "  {}",

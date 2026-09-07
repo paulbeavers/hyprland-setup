@@ -36,11 +36,14 @@ window#waybar {
 }
 
 /* ── workspaces ──────────────────────────────────────────────────────────── */
+/* Ten custom modules rather than hyprland/workspaces — see config.jsonc for
+ * why. They are labels inside the group rather than buttons, so the selectors
+ * changed; the pill shapes and the transition did not. */
 #workspaces {
   padding: 0 2px;
 }
 
-#workspaces button {
+#workspaces label {
   color: @surface1;
   padding: 0 8px;
   margin: 4px 2px;
@@ -49,7 +52,7 @@ window#waybar {
   transition: background-color 150ms ease, color 150ms ease;
 }
 
-#workspaces button:hover {
+#workspaces label:hover {
   background-color: @surface0;
   color: @text;
   /* GTK adds a box-shadow on hover by default; kill it. */
@@ -57,18 +60,22 @@ window#waybar {
   text-shadow: none;
 }
 
-#workspaces button.active {
+#workspaces label.active {
   background-color: @mauve;
   color: @crust;
   padding: 0 14px;
 }
 
-#workspaces button.urgent {
+#workspaces label.urgent {
   background-color: @red;
   color: @crust;
 }
 
-#workspaces button.empty {
+#workspaces label.occupied {
+  color: @text;
+}
+
+#workspaces label.empty {
   color: @surface1;
 }
 

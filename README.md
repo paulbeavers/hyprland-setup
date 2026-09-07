@@ -162,6 +162,7 @@ Or straight from Hyprland: `hyprctl binds` (raw), `hyprctl -j binds` (JSON).
 | `SUPER + R` | Resize mode (`hjkl`, Escape to exit) |
 | `SUPER + X` | Clipboard history |
 | `SUPER + SHIFT + S` | Screenshot region → annotate |
+| `SUPER + I` | Settings (starch-config) |
 | `SUPER + Escape` | Lock |
 | `SUPER + SHIFT + E` | Power menu |
 | `SUPER + SHIFT + M` | Exit Hyprland |
@@ -182,6 +183,17 @@ Or straight from Hyprland: `hyprctl binds` (raw), `hyprctl -j binds` (JSON).
   `hyprctl keyword`, so `hyprctl reload` or a new session returns to the
   `theme.conf` default; change that line to start in scrolling instead.
   `SUPER + ALT + ...` binds drive the tape and do nothing under dwindle.
+- **`starch-config` is the settings app.** `SUPER + I`, or "Settings" in the
+  launcher. It covers display scale, resolution and refresh; the idle timeouts
+  and the lid; keyboard and touchpad; theme, wallpaper, cursor and font. Two
+  things worth knowing about it. It never edits a hand-written config: it owns
+  `monitors.lua`, `hypridle.conf` and `settings.lua` outright and rewrites them
+  whole, keeping the previous version as `.bak`, and `settings.lua` is loaded
+  last by `hyprland.lua` so it overrides `input.lua` without either file having
+  to know about the other — delete it to go back to the defaults. And the scale
+  menu offers only scales that are legal for the mode: Hyprland accepts any
+  number and then silently snaps to one that divides the resolution into whole
+  pixels, so a config can say 1.5 while the session runs at 1.6.
 - **`hyprctl dispatch` speaks Lua here, and that breaks other people's tools.**
   With a Lua config Hyprland evaluates everything after `dispatch` as Lua, so
   `hyprctl dispatch workspace 3` is a syntax error, not a workspace switch —

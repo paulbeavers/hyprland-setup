@@ -174,6 +174,7 @@ bind(mod .. " + X", hl.dsp.exec_cmd(
 -- ── session ─────────────────────────────────────────────────────────────────
 bind(mod .. " + Escape",    hl.dsp.exec_cmd("hyprlock"), "Lock screen")
 bind(mod .. " + SHIFT + E", hl.dsp.exec_cmd("~/.config/hypr/scripts/powermenu.sh"), "Power menu")
+bind(mod .. " + I", hl.dsp.exec_cmd("starch-config"), "Settings")
 bind(mod .. " + slash",     hl.dsp.exec_cmd("~/.config/hypr/scripts/keybinds.sh"), "This cheatsheet")
 bind(mod .. " + W",         hl.dsp.exec_cmd("~/.config/hypr/scripts/wallpaper.sh"), "Wallpaper picker")
 bind(mod .. " + SHIFT + T", hl.dsp.exec_cmd("~/.config/hypr/scripts/theme.sh"), "Colour theme picker")

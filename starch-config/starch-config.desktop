@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Settings
+GenericName=Desktop Settings
+Comment=Display scale, idle timeouts, input and appearance
+Exec=starch-config
+Icon=preferences-desktop
+Terminal=false
+Categories=Settings;DesktopSettings;GTK;
+Keywords=settings;preferences;configuration;scale;display;idle;suspend;theme;
+StartupNotify=true
+StartupWMClass=dev.starch.config

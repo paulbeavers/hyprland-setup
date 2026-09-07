@@ -358,6 +358,10 @@ PKGS_DESKTOP=(
     nwg-look nwg-displays
     imv mpv
     imagemagick jq
+    # starch-config is GTK4 through PyGObject. gtk4 itself comes with
+    # PKGS_THEME; this is the Python binding, and the only thing the settings
+    # app adds to the image.
+    python-gobject
 )
 PKGS_FONTS=(
     ttf-jetbrains-mono ttf-jetbrains-mono-nerd
@@ -774,6 +778,40 @@ if [[ $DO_CONFIGS -eq 1 ]]; then
         for f in "${CHANGED_FILES[@]}"; do info "updated  $f"; done
         ok "$N_ADDED added, $N_CHANGED updated, $N_SAME unchanged"
         [[ $N_CHANGED -gt 0 && $DRY_RUN -eq 0 ]] && info "previous versions saved to $BACKUP_DIR"
+    fi
+
+    # ── the settings app ──────────────────────────────────────────────────────
+    # starch-config is a GTK4 application, not a config file, so it does not go
+    # through the sync above. It lands in /usr/local — the FHS home for software
+    # the administrator installed rather than the package manager — with a
+    # launcher on PATH and a desktop entry so the launcher and any menu can find
+    # it.
+    #
+    # Copied whole rather than symlinked back at this repo: an installed system
+    # should keep working after this checkout is deleted, which is exactly what
+    # people do with a clone they used once.
+    step "Settings app"
+    app_src="$SCRIPT_DIR/starch-config"
+    app_dst=/usr/local/lib/starch-config
+    if [[ ! -d $app_src ]]; then
+        warn "starch-config is missing from this checkout — skipping"
+    elif [[ $DRY_RUN -eq 1 ]]; then
+        info "[dry-run] would install starch-config to $app_dst"
+    else
+        run $SUDO rm -rf "$app_dst"
+        run $SUDO mkdir -p "$app_dst"
+        run $SUDO cp -r "$app_src/starchconfig" "$app_src/starch-config" "$app_dst/"
+        run $SUDO chmod 755 "$app_dst/starch-config"
+        # Python bytecode from running it out of the checkout has no business
+        # being shipped; it is regenerated and it names the old paths.
+        $SUDO find "$app_dst" -name __pycache__ -type d -exec rm -rf {} + 2>/dev/null || true
+
+        # The launcher is a symlink, and the entry point resolves its own real
+        # path before adding it to sys.path, so the package is found through it.
+        run $SUDO ln -sfn "$app_dst/starch-config" /usr/local/bin/starch-config
+        run $SUDO install -Dm644 "$app_src/starch-config.desktop" \
+            /usr/share/applications/starch-config.desktop
+        ok "starch-config installed — SUPER+I, or \"Settings\" in the launcher"
     fi
 
     # ── monitors ──────────────────────────────────────────────────────────────

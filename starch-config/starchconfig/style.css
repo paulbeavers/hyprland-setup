@@ -23,33 +23,72 @@ window.background {
   background-color: transparent;
 }
 
-/* Translucent enough to blur, opaque enough that a light palette over a dark
- * wallpaper is still readable. The first version used 0.86 and Catppuccin
- * Latte washed out completely. */
-.shell {
-  background-color: alpha(@base, 0.93);
-  border: 1px solid alpha(@surface1, 0.9);
-  border-radius: 14px;
+/* Two layers, not one.
+ *
+ * The shell is the chrome — the title bar and the sidebar — and it is the more
+ * transparent of the two, so the blurred desktop reads through it. A single
+ * layer at one opacity made that whole area a flat grey slab, because nothing
+ * was painted over it the way the card is painted over the middle.
+ *
+ * The content pane then paints @base again on top, which lands the settings
+ * themselves at roughly 0.8 and keeps them readable. Same colour, two depths.
+ */
+/* No border and no radius of our own. Hyprland draws the same 2px gradient
+ * border it draws on every other window and rounds the corners to match, so
+ * focus is as obvious here as anywhere else; drawing a second frame inside
+ * that one only ever looked like a mistake. */
+.sc-shell {
+  background-color: alpha(@base, 0.62);
+}
+
+.sc-content-pane {
+  background-color: alpha(@base, 0.5);
+}
+
+/* The chrome is made of the same material as the cards in the middle, just
+ * more solid. Left as plain transparency it took its entire character from
+ * whatever happened to be behind the window, which over a dark terminal is a
+ * flat grey slab — and that is exactly what it looked like. Tinting it with
+ * @surface0 gives it a surface of its own that still passes the blur through. */
+.sc-titlebar,
+.sc-sidebar {
+  background-color: alpha(@surface0, 0.62);
+}
+
+/* Light palettes cannot take the same translucency. A light @base at 62% over
+ * a dark wallpaper turns grey and swallows its own dark text; theme.py works
+ * out which way the palette goes and sets this class. */
+window.sc-light .sc-shell {
+  background-color: alpha(@base, 0.82);
+}
+
+window.sc-light .sc-content-pane {
+  background-color: alpha(@base, 0.45);
+}
+
+window.sc-light .sc-titlebar,
+window.sc-light .sc-sidebar {
+  background-color: alpha(@surface0, 0.55);
 }
 
 /* ── title bar ───────────────────────────────────────────────────────────── */
 /* The window is undecorated, so this is the whole title bar: a drag handle,
  * a name, and a close button. */
-.titlebar {
+.sc-titlebar {
   padding: 12px 14px 8px 16px;
 }
 
-.app-title {
+.sc-app-title {
   font-weight: 700;
   color: @text;
 }
 
-.app-title-accent {
+.sc-app-title-accent {
   font-weight: 700;
   color: @mauve;
 }
 
-.window-close {
+.sc-window-close {
   background-color: transparent;
   border: none;
   color: @overlay;
@@ -59,67 +98,67 @@ window.background {
   min-width: 0;
 }
 
-.window-close:hover {
+.sc-window-close:hover {
   background-color: @red;
   color: @crust;
 }
 
 /* ── sidebar ─────────────────────────────────────────────────────────────── */
-.sidebar {
+.sc-sidebar {
   padding: 6px 8px 12px 10px;
   min-width: 150px;
 }
 
 /* GTK gives a list its own base colour, which reads as a panel sitting on top
  * of the card rather than part of it. */
-.sidebar listview,
-.sidebar list,
-.sidebar row,
+.sc-sidebar listview,
+.sc-sidebar list,
+.sc-sidebar row,
 listview,
 list {
   background-color: transparent;
   background-image: none;
 }
 
-.sidebar row {
+.sc-sidebar row {
   padding: 8px 12px;
   border-radius: 9px;
   color: @subtext;
   margin-bottom: 2px;
 }
 
-.sidebar row:hover {
+.sc-sidebar row:hover {
   background-color: alpha(@surface0, 0.9);
   color: @text;
 }
 
-.sidebar row:selected {
+.sc-sidebar row:selected {
   background-color: @mauve;
   color: @crust;
   font-weight: 700;
 }
 
-.nav-icon {
+.sc-nav-icon {
   font-size: 14px;
 }
 
 /* ── content ─────────────────────────────────────────────────────────────── */
-.content {
+.sc-content {
   padding: 2px 20px 18px 14px;
 }
 
-.page-title {
+.sc-page-title {
   font-size: 19px;
   font-weight: 700;
   color: @text;
 }
 
-.page-subtitle {
+.sc-page-subtitle {
   color: @overlay;
   font-size: 12px;
 }
 
-.section-title {
+.sc-section-title {
   color: @mauve;
   font-size: 11px;
   font-weight: 700;
@@ -132,36 +171,36 @@ list {
 /* Contrast against the shell comes from @surface0, which the palette defines
  * as one step away from @base in whichever direction that theme goes. A fixed
  * alpha over @mantle only worked on dark themes. */
-.card {
+.sc-card {
   background-color: alpha(@surface0, 0.45);
   border: 1px solid alpha(@surface1, 0.55);
   border-radius: 12px;
   padding: 2px 14px;
 }
 
-.row {
+.sc-row {
   padding: 11px 0;
 }
 
-.row-sep {
+.sc-row-sep {
   background-color: alpha(@surface1, 0.5);
   min-height: 1px;
 }
 
-.row-title {
+.sc-row-title {
   color: @text;
 }
 
-.row-subtitle {
+.sc-row-subtitle {
   color: @overlay;
   font-size: 11px;
 }
 
-.dim {
+.sc-dim {
   color: @overlay;
 }
 
-.warn {
+.sc-warn {
   color: @peach;
 }
 
@@ -191,20 +230,20 @@ entry:focus {
   border-color: @overlay;
 }
 
-button.accent {
+button.sc-accent {
   background-color: @mauve;
   color: @crust;
   border-color: @mauve;
   font-weight: 700;
 }
 
-button.accent:hover {
+button.sc-accent:hover {
   background-color: @lavender;
   border-color: @lavender;
 }
 
 button:disabled,
-button.accent:disabled {
+button.sc-accent:disabled {
   background-color: alpha(@surface0, 0.5);
   border-color: alpha(@surface1, 0.5);
   color: @overlay;
@@ -272,11 +311,11 @@ scale slider {
 }
 
 /* ── footer ──────────────────────────────────────────────────────────────── */
-.footer {
+.sc-footer {
   padding: 10px 18px 14px 18px;
 }
 
-.footer-note {
+.sc-footer-note {
   color: @overlay;
   font-size: 11px;
 }

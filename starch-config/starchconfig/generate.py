@@ -78,3 +78,114 @@ def scale_str(scale: float) -> str:
     """Hyprland wants enough digits that 4/3 does not read as 1.33."""
     text = f"{scale:.7f}".rstrip("0").rstrip(".")
     return text or "1"
+
+
+# ── hypridle ─────────────────────────────────────────────────────────────────
+# Timeouts are seconds; None means "never", and that listener is left out.
+
+
+def hypridle_conf(dim, blank, lock, suspend) -> str:
+    """Render hypridle.conf from four timeouts.
+
+    Written whole rather than patched, because the listeners have to come out
+    in ascending order of timeout to read sensibly, and turning one off means
+    removing its block rather than blanking a number.
+    """
+    lines = [
+        "#" * 80,
+        "#  hypridle — idle management",
+        "#",
+        f"#  {BANNER}. Edits here are overwritten.",
+        "#",
+        "#  The hyprctl calls are Lua. With a Lua config Hyprland evaluates",
+        "#  everything after `dispatch` as Lua, so the old `dispatch dpms off`",
+        "#  is a syntax error that fails without a word.",
+        "#" * 80,
+        "",
+        "general {",
+        "    lock_cmd       = pidof hyprlock || hyprlock",
+        "    before_sleep_cmd = loginctl lock-session",
+        "    after_sleep_cmd  = hyprctl dispatch 'hl.dsp.dpms({ action = \"on\" })'",
+        "    ignore_dbus_inhibit = false",
+        "}",
+        "",
+    ]
+
+    listeners = []
+    if dim:
+        listeners.append(
+            (dim, "brightnessctl -s set 10", "brightnessctl -r", "dim the backlight")
+        )
+    if blank:
+        listeners.append(
+            (
+                blank,
+                "hyprctl dispatch 'hl.dsp.dpms({ action = \"off\" })'",
+                "hyprctl dispatch 'hl.dsp.dpms({ action = \"on\" })'",
+                "displays off",
+            )
+        )
+    if lock:
+        listeners.append((lock, "loginctl lock-session", None, "lock"))
+    if suspend:
+        listeners.append((suspend, "systemctl suspend", None, "suspend"))
+
+    for timeout, on_timeout, on_resume, what in sorted(listeners):
+        lines.append(f"# {_minutes(timeout)} — {what}.")
+        lines.append("listener {")
+        lines.append(f"    timeout = {timeout}")
+        lines.append(f"    on-timeout = {on_timeout}")
+        if on_resume:
+            lines.append(f"    on-resume  = {on_resume}")
+        lines.append("}")
+        lines.append("")
+
+    if not listeners:
+        lines.append("# Every timeout is off, so there are no listeners at all.")
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+def _minutes(seconds: int) -> str:
+    if seconds % 60:
+        return f"{seconds} seconds"
+    m = seconds // 60
+    return "1 minute" if m == 1 else f"{m} minutes"
+
+
+# ── the Lua override module ──────────────────────────────────────────────────
+
+
+def settings_lua(config: dict) -> str:
+    """A generated Lua module that overrides a subset of the hand-written ones.
+
+    hl.config sets one key at a time and leaves its siblings alone, which is
+    what makes this safe: emitting input.repeat_rate here does not disturb the
+    twenty other input settings in input.lua.
+    """
+    body = _header(
+        "Settings changed in starch-config.",
+        "The hand-written modules are the defaults. This file overrides only\n"
+        "the handful you have changed, and hyprland.lua loads it last so it\n"
+        "wins. Delete it to go back to the defaults.",
+    )
+    if not config:
+        return body + "-- Nothing overridden.\n"
+    return body + "hl.config(" + _lua_table(config, 0) + ")\n"
+
+
+def _lua_table(value, depth: int) -> str:
+    pad, inner = "    " * depth, "    " * (depth + 1)
+    parts = []
+    for key, item in value.items():
+        if isinstance(item, dict):
+            rendered = _lua_table(item, depth + 1)
+        elif isinstance(item, bool):
+            rendered = "true" if item else "false"
+        elif isinstance(item, (int, float)):
+            rendered = str(item)
+        else:
+            rendered = '"%s"' % str(item).replace('"', '\\"')
+        parts.append(f"{inner}{key} = {rendered},")
+    return "{\n" + "\n".join(parts) + f"\n{pad}}}"

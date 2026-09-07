@@ -44,6 +44,12 @@ require("keybinds")
 require("rules")
 require("autostart")
 
+-- Written by starch-config, and only if you have used it. It comes last so it
+-- wins: hl.config overrides one key at a time and leaves the siblings alone, so
+-- a handful of settings here override the same handful above without the app
+-- having to rewrite — or understand — the hand-written modules.
+optional("settings")
+
 -- Only present on install media, where it starts the installer and puts a
 -- welcome window up. An installed system has no such file and skips it, which
 -- is exactly what optional() is for.

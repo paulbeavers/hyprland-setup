@@ -67,3 +67,31 @@ def apply(table_expr: str) -> str:
 
 def reload() -> str:
     return _run(["reload"], check=False).strip()
+
+
+def get_option(name: str):
+    """Read one config value from the running compositor.
+
+    hyprctl reports the type alongside the value, which is how we know whether
+    "false" means the boolean or the string. Returns None if the compositor is
+    not there or does not know the option.
+    """
+    try:
+        data = json.loads(_run(["getoption", name, "-j"], check=False))
+    except (NotRunning, json.JSONDecodeError):
+        return None
+    for key in ("int", "bool", "float", "str"):
+        if key in data:
+            return data[key]
+    return None
+
+
+def has_touchpad() -> bool:
+    try:
+        devices = query("devices")
+    except (NotRunning, json.JSONDecodeError):
+        return False
+    return any(
+        "touchpad" in (m.get("name") or "").lower()
+        for m in devices.get("mice", [])
+    )

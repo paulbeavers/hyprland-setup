@@ -24,14 +24,14 @@ class Row(Gtk.Box):
 
     def __init__(self, title, control=None, subtitle=None):
         super().__init__(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
-        self.add_css_class("row")
+        self.add_css_class("sc-row")
 
         text = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=1)
         text.set_hexpand(True)
         text.set_valign(Gtk.Align.CENTER)
-        text.append(_label(title, "row-title"))
+        text.append(_label(title, "sc-row-title"))
         if subtitle:
-            text.append(_label(subtitle, "row-subtitle", wrap=True))
+            text.append(_label(subtitle, "sc-row-subtitle", wrap=True))
         self.append(text)
 
         self.control = control
@@ -49,13 +49,13 @@ class Card(Gtk.Box):
 
     def __init__(self):
         super().__init__(orientation=Gtk.Orientation.VERTICAL)
-        self.add_css_class("card")
+        self.add_css_class("sc-card")
         self._empty = True
 
     def add(self, row):
         if not self._empty:
             sep = Gtk.Box()
-            sep.add_css_class("row-sep")
+            sep.add_css_class("sc-row-sep")
             self.append(sep)
         self._empty = False
         self.append(row)
@@ -67,21 +67,21 @@ class Page(Gtk.Box):
 
     def __init__(self, title, subtitle=None):
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-        self.add_css_class("content")
+        self.add_css_class("sc-content")
 
-        self.append(_label(title, "page-title"))
+        self.append(_label(title, "sc-page-title"))
         if subtitle:
-            self.append(_label(subtitle, "page-subtitle", wrap=True))
+            self.append(_label(subtitle, "sc-page-subtitle", wrap=True))
 
     def section(self, title):
         """Add a titled section and return the card to put rows in."""
-        self.append(_label(title.upper(), "section-title"))
+        self.append(_label(title.upper(), "sc-section-title"))
         card = Card()
         self.append(card)
         return card
 
     def note(self, text):
-        label = _label(text, "row-subtitle", wrap=True)
+        label = _label(text, "sc-row-subtitle", wrap=True)
         label.set_margin_top(8)
         label.set_margin_start(4)
         self.append(label)
@@ -110,7 +110,7 @@ def switch(active=False, on_change=None):
 def button(text, *, accent=False, on_click=None):
     widget = Gtk.Button(label=text)
     if accent:
-        widget.add_css_class("accent")
+        widget.add_css_class("sc-accent")
     if on_click:
         widget.connect("clicked", lambda _w: on_click())
     return widget

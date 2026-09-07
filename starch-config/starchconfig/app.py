@@ -18,16 +18,20 @@ from gi.repository import Gdk, Gio, Gtk  # noqa: E402
 
 from . import theme  # noqa: E402
 from .pages import display as display_page  # noqa: E402
+from .pages import idle as idle_page  # noqa: E402
+from .pages import input as input_page  # noqa: E402
+from .pages import look as look_page  # noqa: E402
+from .pages import about as about_page  # noqa: E402
 
 APP_ID = "dev.starch.config"
 
 # icon, label, module
 SECTIONS = [
     ("\U000f0369", "Display", display_page),
-    ("\U000f04b2", "Idle", None),
-    ("\U000f030c", "Input", None),
-    ("\U000f03d8", "Look", None),
-    ("\U000f02fc", "About", None),
+    ("\U000f04b2", "Idle", idle_page),
+    ("\U000f030c", "Input", input_page),
+    ("\U000f03d8", "Look", look_page),
+    ("\U000f02fc", "About", about_page),
 ]
 
 
@@ -42,7 +46,7 @@ class Window(Gtk.ApplicationWindow):
         self.set_default_size(880, 620)
 
         shell = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        shell.add_css_class("shell")
+        shell.add_css_class("sc-shell")
         self.set_child(shell)
 
         shell.append(self._titlebar())
@@ -57,7 +61,10 @@ class Window(Gtk.ApplicationWindow):
         self.stack.set_hexpand(True)
 
         body.append(self._sidebar())
-        body.append(self._scrolled(self.stack))
+
+        pane = self._scrolled(self.stack)
+        pane.add_css_class("sc-content-pane")
+        body.append(pane)
 
         self.footer = self._footer()
         shell.append(self.footer)
@@ -68,13 +75,13 @@ class Window(Gtk.ApplicationWindow):
     # ── chrome ───────────────────────────────────────────────────────────────
     def _titlebar(self):
         bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        bar.add_css_class("titlebar")
+        bar.add_css_class("sc-titlebar")
 
         name = Gtk.Label(label="starch")
-        name.add_css_class("app-title")
+        name.add_css_class("sc-app-title")
 
         accent = Gtk.Label(label="config")
-        accent.add_css_class("app-title-accent")
+        accent.add_css_class("sc-app-title-accent")
 
         bar.append(name)
         bar.append(accent)
@@ -84,7 +91,7 @@ class Window(Gtk.ApplicationWindow):
         bar.append(spacer)
 
         close = Gtk.Button(label="✕")
-        close.add_css_class("window-close")
+        close.add_css_class("sc-window-close")
         close.connect("clicked", lambda _b: self.close())
         bar.append(close)
 
@@ -96,7 +103,7 @@ class Window(Gtk.ApplicationWindow):
 
     def _sidebar(self):
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        box.add_css_class("sidebar")
+        box.add_css_class("sc-sidebar")
 
         self.nav = Gtk.ListBox()
         self.nav.set_selection_mode(Gtk.SelectionMode.SINGLE)
@@ -106,18 +113,14 @@ class Window(Gtk.ApplicationWindow):
             row = Gtk.ListBoxRow()
             line = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
             glyph = Gtk.Label(label=icon)
-            glyph.add_css_class("nav-icon")
+            glyph.add_css_class("sc-nav-icon")
             line.append(glyph)
             line.append(Gtk.Label(label=label, xalign=0.0))
             row.set_child(line)
             row.page_name = label
             self.nav.append(row)
 
-            if module is not None:
-                page = module.build(self)
-            else:
-                page = _placeholder(label)
-            self.stack.add_named(self._scrolled_page(page), label)
+            self.stack.add_named(self._scrolled(module.build(self)), label)
 
         box.append(self.nav)
         self.nav.select_row(self.nav.get_row_at_index(0))
@@ -131,15 +134,12 @@ class Window(Gtk.ApplicationWindow):
         sw.set_hexpand(True)
         return sw
 
-    def _scrolled_page(self, page):
-        return self._scrolled(page)
-
     def _footer(self):
         bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
-        bar.add_css_class("footer")
+        bar.add_css_class("sc-footer")
 
         self.status = Gtk.Label(xalign=0.0)
-        self.status.add_css_class("footer-note")
+        self.status.add_css_class("sc-footer-note")
         self.status.set_hexpand(True)
         bar.append(self.status)
 
@@ -148,7 +148,7 @@ class Window(Gtk.ApplicationWindow):
         bar.append(self.revert_btn)
 
         self.apply_btn = Gtk.Button(label="Apply")
-        self.apply_btn.add_css_class("accent")
+        self.apply_btn.add_css_class("sc-accent")
         self.apply_btn.connect("clicked", lambda _b: self.apply())
         bar.append(self.apply_btn)
 
@@ -187,8 +187,6 @@ class Window(Gtk.ApplicationWindow):
 
     def _reload_pages(self):
         for _icon, label, module in SECTIONS:
-            if module is None:
-                continue
             page = self.stack.get_child_by_name(label)
             if page is not None:
                 self.stack.remove(page)
@@ -210,9 +208,9 @@ class Window(Gtk.ApplicationWindow):
     def _say(self, text, warn=False):
         self.status.set_text(text)
         if warn:
-            self.status.add_css_class("warn")
+            self.status.add_css_class("sc-warn")
         else:
-            self.status.remove_css_class("warn")
+            self.status.remove_css_class("sc-warn")
 
     # ── nav ──────────────────────────────────────────────────────────────────
     def _on_nav(self, _listbox, row):
@@ -220,23 +218,25 @@ class Window(Gtk.ApplicationWindow):
             self.stack.set_visible_child_name(row.page_name)
 
 
-def _placeholder(name):
-    from .widgets import Page
-
-    page = Page(name, "Not built yet.")
-    page.note("This section is next.")
-    return page
-
-
 class Application(Gtk.Application):
     def __init__(self):
         super().__init__(application_id=APP_ID, flags=Gio.ApplicationFlags.FLAGS_NONE)
         self._theme = None
 
+    def _sync_theme_class(self):
+        """Light and dark palettes need different alphas; the class picks."""
+        for win in self.get_windows():
+            if self._theme and self._theme.light:
+                win.add_css_class("sc-light")
+            else:
+                win.remove_css_class("sc-light")
+
     def do_activate(self):
         if self._theme is None:
             self._theme = theme.load(Gdk.Display.get_default())
+            self._theme.on_change = self._sync_theme_class
         win = self.props.active_window or Window(self)
+        self._sync_theme_class()
         win.present()
 
 

@@ -13,3 +13,7 @@
 # root-owned (mkarchiso runs under sudo) and git cannot even index them.
 # Safe to delete with: sudo rm -rf iso/
 iso/
+
+# Python bytecode from starch-config.
+__pycache__/
+*.pyc

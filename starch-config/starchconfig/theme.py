@@ -6,6 +6,7 @@ read that file and paste it on top of our own stylesheet — so the app is theme
 by whatever the desktop is themed by, and SUPER+SHIFT+T changes both.
 """
 
+import re
 from pathlib import Path
 
 from gi.repository import Gdk, Gio, Gtk
@@ -52,6 +53,27 @@ def _css() -> str:
     return palette_css() + "\n" + (Path(__file__).parent / "style.css").read_text()
 
 
+def is_light(palette: str) -> bool:
+    """Does this palette put dark text on a light background?
+
+    It matters because translucency is not symmetric. A dark @base at 60% over
+    a wallpaper still reads as dark, and light text stays legible. A light
+    @base at 60% over the same wallpaper turns grey, and the dark text on it
+    disappears — which is exactly how Catppuccin Latte broke twice. So the
+    stylesheet carries both sets of alphas and the window gets a `light` class
+    to pick between them.
+
+    Decided from @base rather than a `mode` key because colors.css is the only
+    file we read, and every palette has to define @base.
+    """
+    match = re.search(r"@define-color\s+base\s+#([0-9a-fA-F]{6})", palette)
+    if not match:
+        return False
+    r, g, b = (int(match.group(1)[i : i + 2], 16) for i in (0, 2, 4))
+    # Rec. 601 luma. Precision is not the point; which side of the middle is.
+    return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.5
+
+
 class Theme:
     """The stylesheet, kept in step with the desktop's theme.
 
@@ -66,6 +88,8 @@ class Theme:
     """
 
     def __init__(self, display: Gdk.Display):
+        self.on_change = None
+        self.light = is_light(palette_css())
         self.provider = Gtk.CssProvider()
         self.provider.load_from_string(_css())
         Gtk.StyleContext.add_provider_for_display(
@@ -96,9 +120,15 @@ class Theme:
 
     def reload(self):
         try:
-            self.provider.load_from_string(_css())
+            palette = palette_css()
+            self.light = is_light(palette)
+            self.provider.load_from_string(
+                palette + "\n" + (Path(__file__).parent / "style.css").read_text()
+            )
         except Exception:
-            pass  # a half-written palette is transient; the next event wins
+            return  # a half-written palette is transient; the next event wins
+        if self.on_change:
+            self.on_change()
 
 
 def load(display: Gdk.Display) -> Theme:

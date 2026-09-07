@@ -121,15 +121,14 @@ hl.window_rule({
     float = true, size = { 1100, 700 }, center = true,
 })
 
--- The settings app. It draws its own title bar and its own rounded, part
--- transparent card, so Hyprland should neither decorate it nor round it a
--- second time — but it should blur what shows through, which is where the
--- frosted look comes from. Sized to the layout it was designed at.
+-- The settings app. Floated and centred, but otherwise an ordinary window: the
+-- border, the rounding and the shadow are the ones every other window gets, so
+-- it is obvious which window has focus. The app draws no frame of its own and
+-- lets the compositor round its corners.
 hl.window_rule({
     name  = "starch-config",
     match = { class = "^(dev\\.starch\\.config)$" },
     float = true, size = { 880, 620 }, center = true,
-    border_size = 0, rounding = 0, no_shadow = true,
 })
 
 -- ── layer rules ─────────────────────────────────────────────────────────────

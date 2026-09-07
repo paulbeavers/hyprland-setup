@@ -187,6 +187,14 @@ bind("XF86AudioLowerVolume",  hl.dsp.exec_cmd("swayosd-client --output-volume lo
 hl.bind("XF86MonBrightnessUp",   hl.dsp.exec_cmd("swayosd-client --brightness raise"),    osd)
 hl.bind("XF86MonBrightnessDown", hl.dsp.exec_cmd("swayosd-client --brightness lower"),    osd)
 
+-- Keyboard backlight. A separate device from the screen, and swayosd only
+-- knows about the screen, so these go through a script that finds whichever
+-- kbd_backlight this machine has — the name is vendor-specific. On a machine
+-- without one the script exits quietly, so these are harmless on a desktop.
+hl.bind("XF86KbdBrightnessUp",   hl.dsp.exec_cmd("~/.config/hypr/scripts/kbd-backlight.sh up"),   osd)
+hl.bind("XF86KbdBrightnessDown", hl.dsp.exec_cmd("~/.config/hypr/scripts/kbd-backlight.sh down"), osd)
+hl.bind("XF86KbdLightOnOff",     hl.dsp.exec_cmd("~/.config/hypr/scripts/kbd-backlight.sh toggle"), osd)
+
 local lockedOnly = { locked = true }
 bind("XF86AudioMute",    hl.dsp.exec_cmd("swayosd-client --output-volume mute-toggle"), "AudioMute", lockedOnly)
 hl.bind("XF86AudioMicMute", hl.dsp.exec_cmd("swayosd-client --input-volume mute-toggle"),  lockedOnly)

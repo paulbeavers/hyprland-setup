@@ -1,0 +1,17 @@
+#!/usr/bin/env python3
+"""starch-config — settings for a starch desktop.
+
+There is nothing to install: the package sits next to this file and is what
+gets imported, so running it from a git checkout and running it from wherever
+it was copied on the installed system behave identically.
+"""
+
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from starchconfig.app import main  # noqa: E402  (needs the path set first)
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

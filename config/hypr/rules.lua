@@ -121,6 +121,17 @@ hl.window_rule({
     float = true, size = { 1100, 700 }, center = true,
 })
 
+-- The settings app. It draws its own title bar and its own rounded, part
+-- transparent card, so Hyprland should neither decorate it nor round it a
+-- second time — but it should blur what shows through, which is where the
+-- frosted look comes from. Sized to the layout it was designed at.
+hl.window_rule({
+    name  = "starch-config",
+    match = { class = "^(dev\\.starch\\.config)$" },
+    float = true, size = { 880, 620 }, center = true,
+    border_size = 0, rounding = 0, no_shadow = true,
+})
+
 -- ── layer rules ─────────────────────────────────────────────────────────────
 -- Layers are the shell surfaces: the bar, the launcher, notifications.
 hl.layer_rule({ name = "blur-waybar",  match = { namespace = "^(waybar)$" },        blur = true, ignore_alpha = 0.2 })

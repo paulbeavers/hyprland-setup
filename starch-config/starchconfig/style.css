@@ -1,0 +1,282 @@
+/* starch-config — GTK4 stylesheet
+ *
+ * The colour names are not defined here. theme.sh renders the active palette
+ * to waybar/colors.css as @define-color declarations, and theme.py prepends
+ * that file to this one before handing the pair to GTK. So this stylesheet
+ * only ever names roles — @base, @mauve, @overlay — and switching theme with
+ * SUPER+SHIFT+T restyles this app along with the bar.
+ *
+ * Deliberately no libadwaita. Its stylesheet encodes GNOME's design language
+ * and resists being overridden; without it every pixel here is ours.
+ */
+
+* {
+  font-family: "JetBrainsMono Nerd Font", "JetBrains Mono", monospace;
+  font-size: 13px;
+}
+
+/* The window itself is transparent and draws nothing. Hyprland blurs whatever
+ * shows through the translucent parts of a window, so the frosted look comes
+ * from the compositor rather than from anything we render. */
+window,
+window.background {
+  background-color: transparent;
+}
+
+/* Translucent enough to blur, opaque enough that a light palette over a dark
+ * wallpaper is still readable. The first version used 0.86 and Catppuccin
+ * Latte washed out completely. */
+.shell {
+  background-color: alpha(@base, 0.93);
+  border: 1px solid alpha(@surface1, 0.9);
+  border-radius: 14px;
+}
+
+/* ── title bar ───────────────────────────────────────────────────────────── */
+/* The window is undecorated, so this is the whole title bar: a drag handle,
+ * a name, and a close button. */
+.titlebar {
+  padding: 12px 14px 8px 16px;
+}
+
+.app-title {
+  font-weight: 700;
+  color: @text;
+}
+
+.app-title-accent {
+  font-weight: 700;
+  color: @mauve;
+}
+
+.window-close {
+  background-color: transparent;
+  border: none;
+  color: @overlay;
+  padding: 2px 8px;
+  border-radius: 8px;
+  min-height: 0;
+  min-width: 0;
+}
+
+.window-close:hover {
+  background-color: @red;
+  color: @crust;
+}
+
+/* ── sidebar ─────────────────────────────────────────────────────────────── */
+.sidebar {
+  padding: 6px 8px 12px 10px;
+  min-width: 150px;
+}
+
+/* GTK gives a list its own base colour, which reads as a panel sitting on top
+ * of the card rather than part of it. */
+.sidebar listview,
+.sidebar list,
+.sidebar row,
+listview,
+list {
+  background-color: transparent;
+  background-image: none;
+}
+
+.sidebar row {
+  padding: 8px 12px;
+  border-radius: 9px;
+  color: @subtext;
+  margin-bottom: 2px;
+}
+
+.sidebar row:hover {
+  background-color: alpha(@surface0, 0.9);
+  color: @text;
+}
+
+.sidebar row:selected {
+  background-color: @mauve;
+  color: @crust;
+  font-weight: 700;
+}
+
+.nav-icon {
+  font-size: 14px;
+}
+
+/* ── content ─────────────────────────────────────────────────────────────── */
+.content {
+  padding: 2px 20px 18px 14px;
+}
+
+.page-title {
+  font-size: 19px;
+  font-weight: 700;
+  color: @text;
+}
+
+.page-subtitle {
+  color: @overlay;
+  font-size: 12px;
+}
+
+.section-title {
+  color: @mauve;
+  font-size: 11px;
+  font-weight: 700;
+  margin: 16px 4px 6px 4px;
+}
+
+/* Settings are grouped into cards, the way the bar groups its modules into a
+ * slab: one rounded container, hairline border, rows separated by nothing more
+ * than space. */
+/* Contrast against the shell comes from @surface0, which the palette defines
+ * as one step away from @base in whichever direction that theme goes. A fixed
+ * alpha over @mantle only worked on dark themes. */
+.card {
+  background-color: alpha(@surface0, 0.45);
+  border: 1px solid alpha(@surface1, 0.55);
+  border-radius: 12px;
+  padding: 2px 14px;
+}
+
+.row {
+  padding: 11px 0;
+}
+
+.row-sep {
+  background-color: alpha(@surface1, 0.5);
+  min-height: 1px;
+}
+
+.row-title {
+  color: @text;
+}
+
+.row-subtitle {
+  color: @overlay;
+  font-size: 11px;
+}
+
+.dim {
+  color: @overlay;
+}
+
+.warn {
+  color: @peach;
+}
+
+/* ── controls ────────────────────────────────────────────────────────────── */
+/* Sitting on a @surface0 card, controls step back towards @base. That reads as
+ * inset on a dark theme and raised on a light one, which is correct both ways
+ * round. */
+dropdown > button,
+button,
+spinbutton,
+entry {
+  background-color: alpha(@base, 0.8);
+  background-image: none;
+  color: @text;
+  border: 1px solid alpha(@surface1, 0.9);
+  border-radius: 8px;
+  padding: 5px 10px;
+  box-shadow: none;
+  text-shadow: none;
+}
+
+dropdown > button:hover,
+button:hover,
+spinbutton:hover,
+entry:focus {
+  background-color: @base;
+  border-color: @overlay;
+}
+
+button.accent {
+  background-color: @mauve;
+  color: @crust;
+  border-color: @mauve;
+  font-weight: 700;
+}
+
+button.accent:hover {
+  background-color: @lavender;
+  border-color: @lavender;
+}
+
+button:disabled,
+button.accent:disabled {
+  background-color: alpha(@surface0, 0.5);
+  border-color: alpha(@surface1, 0.5);
+  color: @overlay;
+}
+
+popover > contents {
+  background-color: @mantle;
+  border: 1px solid @surface0;
+  border-radius: 10px;
+  padding: 4px;
+  color: @text;
+}
+
+popover listview > row {
+  border-radius: 7px;
+  padding: 5px 8px;
+}
+
+popover listview > row:selected,
+popover listview > row:hover {
+  background-color: @surface0;
+  color: @text;
+}
+
+switch {
+  background-color: @surface1;
+  border: none;
+  border-radius: 999px;
+  min-width: 42px;
+  min-height: 22px;
+}
+
+switch:checked {
+  background-color: @mauve;
+}
+
+switch > slider {
+  background-color: @text;
+  border: none;
+  border-radius: 999px;
+  min-width: 18px;
+  min-height: 18px;
+}
+
+switch:checked > slider {
+  background-color: @crust;
+}
+
+scale trough {
+  background-color: @surface0;
+  border-radius: 999px;
+  min-height: 5px;
+}
+
+scale highlight {
+  background-color: @mauve;
+  border-radius: 999px;
+}
+
+scale slider {
+  background-color: @text;
+  border-radius: 999px;
+  min-width: 15px;
+  min-height: 15px;
+}
+
+/* ── footer ──────────────────────────────────────────────────────────────── */
+.footer {
+  padding: 10px 18px 14px 18px;
+}
+
+.footer-note {
+  color: @overlay;
+  font-size: 11px;
+}

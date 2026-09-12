@@ -10,11 +10,13 @@ ImageDir=/usr/share/plymouth/themes/starch
 # misnomer here — it is the whole point of the screen.
 WatermarkImage=watermark.png
 WatermarkHorizontalAlignment=.5
-WatermarkVerticalAlignment=.42
+WatermarkVerticalAlignment=.40
 
-# The spinner, below the logo. Frames are throbber-NNNN.png.
+# The spinner, below the logo. Frames are throbber-NNNN.png. .73 put it on top
+# of the wordmark — the watermark is anchored at its centre, so the throbber
+# has to clear half the logo's height, not all of it.
 HorizontalAlignment=.5
-VerticalAlignment=.73
+VerticalAlignment=.82
 
 # Crust, flat. A gradient here fights the one baked into the logo, and on a
 # panel that is not colour-managed it bands.

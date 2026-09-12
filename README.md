@@ -215,7 +215,8 @@ Or straight from Hyprland: `hyprctl binds` (raw), `hyprctl -j binds` (JSON).
   `theme.lua` default; change that line to start in scrolling instead.
   `SUPER + ALT + ...` binds drive the tape and do nothing under dwindle.
 - **`starch-config` is the settings app.** `SUPER + I`, or "Settings" in the
-  launcher. It covers display scale, resolution and refresh; the idle timeouts
+  launcher. It also opens on its welcome page at first login, and that page
+  has a switch to stop it doing so. It covers display scale, resolution and refresh; the idle timeouts
   and the lid; keyboard and touchpad; theme, wallpaper, cursor and font. Two
   things worth knowing about it. It never edits a hand-written config: it owns
   `monitors.lua`, `hypridle.conf` and `settings.lua` outright and rewrites them

@@ -54,6 +54,13 @@ hl.on("hyprland.start", function()
 
     -- Set the cursor explicitly so XWayland apps do not fall back to X11's.
     hl.exec_cmd("hyprctl setcursor Adwaita 24")
+
+    -- The settings app, on its welcome page. --welcome is the difference
+    -- between "the desktop started me" and "someone asked for me": with it,
+    -- the app exits without drawing anything if its own "Show at login"
+    -- switch has been turned off. So this line stays regardless of the
+    -- choice, and the choice lives where it is made.
+    hl.exec_cmd("starch-config --welcome")
 end)
 
 --------------------------------------------------------------------------------

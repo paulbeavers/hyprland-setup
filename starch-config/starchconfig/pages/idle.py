@@ -146,15 +146,19 @@ def _restart_hypridle(wanted: bool):
     it instead — the absence of the daemon is a truer statement of "no idle
     handling" than a daemon configured to do nothing.
     """
-    subprocess.run(["pkill", "-x", "hypridle"], capture_output=True)
-    if not wanted:
-        return
-    subprocess.Popen(
-        ["hypridle"],
-        start_new_session=True,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
+    try:
+        subprocess.run(["pkill", "-x", "hypridle"], capture_output=True)
+        if not wanted:
+            return
+        subprocess.Popen(
+            ["hypridle"],
+            start_new_session=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except OSError as exc:
+        # Apply reports this; it must not raise into the toolkit.
+        raise RuntimeError(f"could not restart hypridle: {exc}") from exc
 
 
 LID_TEMPLATE = """# {banner}. Edits here are overwritten.
@@ -173,24 +177,29 @@ HandleLidSwitchDocked=ignore
 def _write_lid(action: str):
     """The one setting here that lives outside the home directory."""
     body = LID_TEMPLATE.format(banner=generate.BANNER, action=action)
-    result = subprocess.run(
-        [
-            "pkexec",
-            "/bin/sh",
-            "-c",
-            # logind can reload, so the setting takes effect now rather than
-            # at the next boot. Reload rather than restart: restarting logind
-            # takes the session down with it.
-            "mkdir -p /etc/systemd/logind.conf.d && "
-            "cat > /etc/systemd/logind.conf.d/10-starch-lid.conf && "
-            "systemctl reload systemd-logind",
-        ],
-        input=body,
-        text=True,
-        capture_output=True,
-    )
+    try:
+        result = subprocess.run(
+            [
+                "pkexec",
+                "/bin/sh",
+                "-c",
+                # logind can reload, so the setting takes effect now rather
+                # than at the next boot. Reload rather than restart:
+                # restarting logind takes the session down with it.
+                "mkdir -p /etc/systemd/logind.conf.d && "
+                "cat > /etc/systemd/logind.conf.d/10-starch-lid.conf && "
+                "systemctl reload systemd-logind",
+            ],
+            input=body,
+            text=True,
+            capture_output=True,
+        )
+    except OSError as exc:
+        raise RuntimeError(f"could not run pkexec: {exc}") from exc
+
     if result.returncode != 0:
         raise RuntimeError(
-            result.stderr.strip().splitlines()[-1] if result.stderr.strip()
+            result.stderr.strip().splitlines()[-1]
+            if result.stderr.strip()
             else "not authorised"
         )

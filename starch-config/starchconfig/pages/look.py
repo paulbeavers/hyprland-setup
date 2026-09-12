@@ -16,8 +16,24 @@ CURSOR_SIZES = [16, 20, 24, 32, 40, 48, 64]
 FONT_SIZES = [9, 10, 11, 12, 13, 14, 16]
 
 
+class _Failed:
+    """Stands in for a CompletedProcess when the command is not there at all.
+
+    theme.sh and wallpaper.sh live in the deployed config, so a checkout that
+    has never been installed does not have them — and an exception here took
+    the whole app down rather than the one page.
+    """
+
+    returncode = 1
+    stdout = ""
+    stderr = "not found"
+
+
 def _run(args, **kw):
-    return subprocess.run(args, capture_output=True, text=True, timeout=20, **kw)
+    try:
+        return subprocess.run(args, capture_output=True, text=True, timeout=20, **kw)
+    except (OSError, subprocess.TimeoutExpired):
+        return _Failed()
 
 
 def _gsettings(key, default=None):
@@ -119,21 +135,24 @@ class _LookState:
         return label
 
     def pick_wallpaper(self):
-        # Detached: the picker is wofi, and it outlives this callback.
-        subprocess.Popen(
-            [str(paths.WALLPAPER_SH)],
-            start_new_session=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
+        self._detach([str(paths.WALLPAPER_SH)])
 
     def random_wallpaper(self):
-        subprocess.Popen(
-            [str(paths.WALLPAPER_SH), "--random"],
-            start_new_session=True,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
+        self._detach([str(paths.WALLPAPER_SH), "--random"])
+
+    @staticmethod
+    def _detach(args):
+        """The picker is wofi and outlives this callback, so it is detached —
+        and a missing script says so rather than raising into the toolkit."""
+        try:
+            subprocess.Popen(
+                args,
+                start_new_session=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except OSError:
+            pass
 
     # ── sizes ────────────────────────────────────────────────────────────────
     def cursor_control(self):

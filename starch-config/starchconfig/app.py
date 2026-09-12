@@ -17,6 +17,8 @@ gi.require_version("Gdk", "4.0")
 from gi.repository import Gdk, Gio, Gtk  # noqa: E402
 
 from . import theme  # noqa: E402
+from . import state  # noqa: E402
+from .pages import welcome as welcome_page  # noqa: E402
 from .pages import display as display_page  # noqa: E402
 from .pages import idle as idle_page  # noqa: E402
 from .pages import input as input_page  # noqa: E402
@@ -27,6 +29,7 @@ APP_ID = "dev.starch.config"
 
 # icon, label, module
 SECTIONS = [
+    ("\U000f02d1", "Welcome", welcome_page),
     ("\U000f0369", "Display", display_page),
     ("\U000f04b2", "Idle", idle_page),
     ("\U000f030c", "Input", input_page),
@@ -36,8 +39,9 @@ SECTIONS = [
 
 
 class Window(Gtk.ApplicationWindow):
-    def __init__(self, app):
+    def __init__(self, app, start_page=None):
         super().__init__(application=app, title="starch-config")
+        self.start_page = start_page
 
         # Undecorated, so the title bar below is the real one. GTK's own
         # decorations would draw their shadow and rounding outside our card and
@@ -123,7 +127,12 @@ class Window(Gtk.ApplicationWindow):
             self.stack.add_named(self._scrolled(module.build(self)), label)
 
         box.append(self.nav)
-        self.nav.select_row(self.nav.get_row_at_index(0))
+        start = 0
+        for i, (_icon, label, _module) in enumerate(SECTIONS):
+            if label == self.start_page:
+                start = i
+                break
+        self.nav.select_row(self.nav.get_row_at_index(start))
         return box
 
     @staticmethod
@@ -222,6 +231,7 @@ class Application(Gtk.Application):
     def __init__(self):
         super().__init__(application_id=APP_ID, flags=Gio.ApplicationFlags.FLAGS_NONE)
         self._theme = None
+        self.start_page = None
 
     def _sync_theme_class(self):
         """Light and dark palettes need different alphas; the class picks."""
@@ -235,10 +245,24 @@ class Application(Gtk.Application):
         if self._theme is None:
             self._theme = theme.load(Gdk.Display.get_default())
             self._theme.on_change = self._sync_theme_class
-        win = self.props.active_window or Window(self)
+        win = self.props.active_window or Window(self, self.start_page)
         self._sync_theme_class()
         win.present()
 
 
 def main(argv):
-    return Application().run(argv)
+    """--welcome means "the desktop started me", not "the user asked for me".
+
+    It opens on the welcome page, and does nothing at all if that page's own
+    switch has been turned off — which is what makes the switch worth having.
+    """
+    at_login = "--welcome" in argv
+    if at_login and not state.get("show_at_login"):
+        return 0
+
+    app = Application()
+    if at_login:
+        app.start_page = "Welcome"
+    # GTK is given no arguments of ours: it would reject the ones it does not
+    # know and refuse to start.
+    return app.run([argv[0]])

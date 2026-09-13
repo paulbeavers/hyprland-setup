@@ -291,7 +291,9 @@ PKGS_BASE=(
     base-devel git curl wget man-db man-pages
     xdg-user-dirs xdg-utils
     unzip zip 7zip
-    reflector pacman-contrib
+    # rate-mirrors, not reflector: reflector left the official repos and is
+    # AUR-only now, and this list has to install before any AUR helper exists.
+    rate-mirrors pacman-contrib
     nano
 )
 # Vendor-neutral graphics base, present regardless of who made the card.

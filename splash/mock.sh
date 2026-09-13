@@ -11,11 +11,11 @@ magick -size ${W}x${H} radial-gradient:'#1c1c2b-#0d0d15' bg.png
 logo_h=$(( H * 34 / 100 ))
 magick logo.png -resize x${logo_h} PNG32:logo-s.png
 
-# Spinner below it.
-magick throbber-0006.png -resize x$(( H * 7 / 100 )) PNG32:spin-s.png
+# Spinner below it, from the theme where the frames actually live.
+magick theme/throbber-0006.png -resize x$(( H * 5 / 100 )) PNG32:spin-s.png
 
 magick bg.png \
   \( logo-s.png \) -gravity center -geometry +0-$(( H * 4 / 100 )) -composite \
-  \( spin-s.png \) -gravity center -geometry +0+$(( H * 26 / 100 )) -composite \
+  \( spin-s.png \) -gravity center -geometry +0+$(( H * 38 / 100 )) -composite \
   "$OUT"
 rm -f bg.png logo-s.png spin-s.png

@@ -3,10 +3,13 @@
 # because Plymouth plays frames at a fixed rate and a rotating arc makes any
 # stutter obvious, while a fading ring does not.
 set -euo pipefail
+# Small on purpose. It sits below the logo, and on a 1280x800 panel a large
+# ring reached the wordmark; the splash should read as a logo with a quiet
+# indicator under it, not as a logo with a wheel on top of it.
 N=${1:-36}          # frames
-S=160               # canvas
-R=56                # ring radius
-DOT=9
+S=96                # canvas
+R=30                # ring radius
+DOT=5
 C=$((S/2))
 
 for ((f=0; f<N; f++)); do

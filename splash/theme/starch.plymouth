@@ -12,11 +12,12 @@ WatermarkImage=watermark.png
 WatermarkHorizontalAlignment=.5
 WatermarkVerticalAlignment=.40
 
-# The spinner, below the logo. Frames are throbber-NNNN.png. .73 put it on top
-# of the wordmark — the watermark is anchored at its centre, so the throbber
-# has to clear half the logo's height, not all of it.
+# The spinner, below the logo. Frames are throbber-NNNN.png. The watermark is
+# anchored at its own centre, so the throbber has to clear half the logo's
+# height, not all of it — .73 put it on the wordmark. Kept low and small so it
+# stays clear of the logo on a short panel.
 HorizontalAlignment=.5
-VerticalAlignment=.82
+VerticalAlignment=.88
 
 # Crust, flat. A gradient here fights the one baked into the logo, and on a
 # panel that is not colour-managed it bands.

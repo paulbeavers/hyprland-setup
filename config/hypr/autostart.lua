@@ -12,7 +12,15 @@
 hl.on("hyprland.start", function()
     -- Tell systemd and D-Bus about the session so portals, screen sharing and
     -- xdg-open all find the right compositor.
-    hl.exec_cmd("dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP HYPRLAND_INSTANCE_SIGNATURE")
+    --
+    -- Then, if nothing has started the systemd graphical session, start it.
+    -- uwsm does that itself; a display manager's plain "Hyprland" entry does
+    -- not, and without it the portals never start — which, among other things,
+    -- leaves Firefox showing sites light on a dark desktop. In that order, and
+    -- in one shell, so the portals see WAYLAND_DISPLAY when they start.
+    hl.exec_cmd("dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP HYPRLAND_INSTANCE_SIGNATURE"
+        .. " && { systemctl --user -q is-active graphical-session.target"
+        .. " || systemctl --user start hyprland-session.target; }")
 
     -- Without a polkit agent anything asking for a password silently fails.
     hl.exec_cmd("systemctl --user start hyprpolkitagent")
@@ -61,6 +69,13 @@ hl.on("hyprland.start", function()
     -- switch has been turned off. So this line stays regardless of the
     -- choice, and the choice lives where it is made.
     hl.exec_cmd("starch-config --welcome")
+end)
+
+-- And stop it again, so a later login does not find a session still marked
+-- active with portals attached to a compositor that has gone. A no-op under
+-- uwsm, which never started this target.
+hl.on("hyprland.shutdown", function()
+    hl.exec_cmd("systemctl --user stop hyprland-session.target")
 end)
 
 --------------------------------------------------------------------------------

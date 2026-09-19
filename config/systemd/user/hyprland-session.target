@@ -1,0 +1,14 @@
+# Stands in for uwsm when Hyprland is started without it.
+#
+# The portals, and anything else that belongs to a desktop session, only start
+# once graphical-session.target is active. uwsm activates it; a display
+# manager's plain "Hyprland" entry does not, and then the portal never starts
+# and Firefox cannot learn that the desktop is dark. graphical-session.target
+# refuses to be started by hand, but it can be pulled in by another unit, which
+# is all this does. autostart.lua starts it only when nothing else has.
+[Unit]
+Description=Hyprland session (without uwsm)
+Documentation=man:systemd.special(7)
+BindsTo=graphical-session.target
+Wants=graphical-session-pre.target
+After=graphical-session-pre.target

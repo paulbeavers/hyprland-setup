@@ -1,7 +1,8 @@
 # hyprland-setup
 
-Turns a fresh Arch Linux install into a working Hyprland desktop, and keeps the
-result editable rather than magic.
+Turns a fresh Arch Linux or Fedora install into a working Hyprland desktop, and
+keeps the result editable rather than magic. Fedora includes aarch64 — Fedora
+Asahi Remix on Apple silicon is the tested case.
 
 ## On a new machine
 
@@ -27,6 +28,57 @@ safe and cheap — see **Re-running** below.
 If you would rather not build a machine by hand, the [starch](https://github.com/paulbeavers/starch)
 ISO installs all of this and then removes itself, leaving a plain Arch system
 with this desktop on it.
+
+## On Fedora
+
+Fedora 41 or later (the script uses dnf5), any edition, x86_64 or aarch64 —
+including Fedora Asahi Remix on Apple silicon. The steps are the same:
+
+```bash
+sudo dnf install git
+git clone https://github.com/paulbeavers/hyprland-setup.git ~/hyprland-setup
+cd ~/hyprland-setup
+./install.sh
+```
+
+What differs from Arch:
+
+- **Hyprland comes from a COPR.** Fedora does not package it. If a Hyprland
+  is already installed, or an enabled repository already offers one, that is
+  what gets used. Only when nothing does is the
+  [`nett00n/hyprland`](https://copr.fedorainfracloud.org/coprs/nett00n/hyprland/)
+  COPR enabled. It also supplies `uwsm`, `hyprpolkitagent`, `swayosd`,
+  `cliphist` and a current `waybar`. The config is Lua, so Hyprland has to be
+  0.55 or newer, and the script warns if it is not.
+- **Your login screen stays.** Fedora Workstation already has GDM, which lists
+  Hyprland's sessions by itself, so greetd is not installed. Pick
+  **Hyprland (uwsm-managed)** from the session menu. `--greetd` replaces GDM
+  with greetd + tuigreet instead, as on Arch.
+- **Nerd Fonts are downloaded.** Fedora does not package JetBrainsMono Nerd
+  Font or the Nerd Font symbols, so they come from the upstream release into
+  `/usr/local/share/fonts/nerd-fonts`.
+- **No full system upgrade.** Arch runs `pacman -Syu` before installing
+  anything, because it does not support partial upgrades. Fedora does, so the
+  script only runs `dnf install`.
+- **Not packaged, so not installed:** `nwg-look` and `nwg-displays`
+  (`starch-config` covers displays), and `starship`, which nothing here uses.
+  Anything no enabled repository offers on this machine, such as Steam away
+  from Asahi or the Intel iHD driver without RPM Fusion, is reported and
+  skipped.
+- **NVIDIA and Broadcom `wl`** drivers live in RPM Fusion. The script says so
+  rather than enabling a third-party repository for you.
+
+On Apple silicon the GPU is recognised from its kernel driver (`asahi`) rather
+than a PCI ID, and needs no environment variables: Mesa's asahi and Honeykrisp
+drivers are picked up on their own.
+
+## What it does not touch
+
+The boot. On either distro, `install.sh` leaves Plymouth, the initramfs and the
+kernel command line as it found them — a desktop has no business rebuilding
+them. The starch boot splash belongs to
+[starch](https://github.com/paulbeavers/starch), which puts it on the machines
+it installs.
 
 ## Re-running
 
@@ -70,9 +122,10 @@ Use `--dry-run` to see what would change without writing anything.
 | `--force-packages` | Re-run the package and service steps even if complete |
 | `--redetect-monitors` | Regenerate `monitors.lua` from connected displays |
 | `--dry-run` | Show what would change; write nothing |
-| `--aur` | Also build `paru`, an AUR helper (off by default) |
-| `--no-gaming` | Skip multilib, Steam, gamemode, 32-bit drivers |
+| `--aur` | Arch only. Also build `paru`, an AUR helper (off by default) |
+| `--gaming` | Also install Steam, gamemode, mangohud; on Arch, multilib and 32-bit drivers too |
 | `--no-bluetooth` | Skip `bluez` / `blueman` |
+| `--greetd` | Use greetd even if another display manager (GDM) is enabled, disabling it |
 | `--no-greetd` | No login manager — start Hyprland from a TTY |
 
 ## Graphics drivers
@@ -87,6 +140,12 @@ The script reads the PCI vendor ID from `/sys/class/drm/card*/device/vendor`
 | NVIDIA | `nvidia-open-dkms`, `nvidia-utils`, `egl-wayland`, `libva-nvidia-driver`, kernel headers | `lib32-nvidia-utils` |
 | VM | `vulkan-virtio`, `vulkan-swrast` | — |
 | Unknown | `vulkan-swrast` (software) | — |
+
+That table is Arch. On Fedora one package, `mesa-vulkan-drivers`, carries every
+Mesa Vulkan driver, so the vendor adds little. ARM GPUs have no PCI ID and are
+recognised by kernel driver instead: `asahi` (Apple silicon), and `panfrost`,
+`panthor`, `msm`, `v3d` and the like (other SoCs). Display-only devices such
+as `apple-drm` are not counted as GPUs.
 
 Hybrid systems (Intel iGPU + NVIDIA dGPU) get both, plus a note in
 `gpu.lua` about `AQ_DRM_DEVICES` for choosing the render GPU.

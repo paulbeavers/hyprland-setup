@@ -41,6 +41,25 @@ which needs no running compositor, or `hyprctl configerrors` in a session.
 
 ## install.sh
 
+**Two distros, one desktop.** `DISTRO` (arch | fedora, from `/etc/os-release`)
+selects the package lists, the package manager, the greeter account and where
+Hyprland comes from. Everything under `config/` is shared and must stay
+distro-neutral. A package added to one list needs its counterpart in the other;
+Fedora names differ often (`python3-gobject`, `Thunar`, `qt6-qtwayland`), and
+`dnf repoquery <name>` on a Fedora box says whether one exists. Fedora has no
+Hyprland of its own: an installed build or an enabled COPR is always respected,
+and `nett00n/hyprland` is enabled only when nothing provides it.
+
+**It does not touch the boot.** No Plymouth, initramfs or kernel command line:
+the splash lives in starch, which owns the machines it installs. It used to live
+here, and on Fedora that meant a desktop install replacing the distro's boot
+theme and rebuilding every initramfs.
+
+**starch reads the package lists out of this file.** Its `extract-packages.sh`
+takes `^PKGS_...=(` through `^)` with sed, so the Arch arrays must stay at
+column 0, and anything between them — the sed range runs past one-line arrays
+to the next column-0 `)` — is evaluated there with `set -u` and no `DISTRO`.
+
 Idempotent by design: a second run detects that packages and services are in
 place and becomes a config sync. It backs up only files that actually changed.
 `monitors.lua` is left alone once written, so a hand-tuned layout survives.

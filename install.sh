@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 #
-# install.sh — add Hyprland + a working desktop to a fresh Arch Linux install.
+# install.sh — add Hyprland + a working desktop to a fresh Arch Linux or
+# Fedora install. Fedora includes aarch64, and Fedora Asahi Remix on Apple
+# silicon in particular.
 #
 # Designed to be re-run. On a second run it works out that packages and
 # services are already in place and becomes a fast config refresh: only files
@@ -45,6 +47,12 @@ DEFAULT_THEME=catppuccin-mocha
 # gradient is used instead.
 DEFAULT_WALLPAPER=/usr/share/hypr/wall2.png
 
+# Fedora does not package Hyprland. When nothing on the machine provides it
+# yet, this COPR is enabled; an existing build or COPR is always kept.
+# HYPRLAND_MIN is the first release that reads the Lua config.
+HYPRLAND_COPR=nett00n/hyprland
+HYPRLAND_MIN=0.55
+
 # Set by --for-user. Normally this script runs as you and calls sudo; an
 # installer runs it as root inside a chroot, where there is no "you" and no
 # sudo to call. FOR_USER names the account the desktop is being set up for.
@@ -58,7 +66,9 @@ DO_AUR=0            # opt-in: nothing this script installs comes from the AUR
 DO_GAMING=0            # opt-in: Steam and the 32-bit stack are a large,
                        # opinionated addition, and one command to add later
 DO_BLUETOOTH=1
-DO_GREETD=1
+DO_GREETD=auto          # auto | yes | no — "auto" defers to a display manager
+                        # that is already enabled, which on Fedora Workstation
+                        # is GDM, rather than fighting it for the alias
 REDETECT_MONITORS=0
 DRY_RUN=0
 
@@ -77,11 +87,15 @@ By default the script decides for itself what still needs doing:
                        existing one alone, so hand-tuned layouts survive).
   --dry-run            Show what would change; write nothing.
 
-  --aur                Also build paru, an AUR helper. Off by default: every
-                       package this script installs is in the official repos.
-  --gaming             Also enable multilib and install Steam, gamemode,
-                       mangohud and the 32-bit drivers. Off by default.
+  --aur                Arch only. Also build paru, an AUR helper. Off by
+                       default: every package this script installs is in the
+                       official repos.
+  --gaming             Also install Steam, gamemode and mangohud (on Arch,
+                       multilib and the 32-bit drivers too). Off by default.
   --no-bluetooth       Skip bluez/blueman.
+  --greetd             Use greetd + tuigreet even if another display manager
+                       (GDM on Fedora Workstation) is enabled; that one is
+                       disabled. By default an existing one is kept.
   --no-greetd          Skip the login manager.
   --for-user NAME      Run as root and configure the desktop for NAME instead
                        of the invoking user. For installers running this inside
@@ -105,7 +119,8 @@ while [[ $# -gt 0 ]]; do
         --gaming)            DO_GAMING=1 ;;
         --no-gaming)         DO_GAMING=0 ;;   # kept: it used to be the default
         --no-bluetooth)      DO_BLUETOOTH=0 ;;
-        --no-greetd)         DO_GREETD=0 ;;
+        --greetd)            DO_GREETD=yes ;;
+        --no-greetd)         DO_GREETD=no ;;
         --for-user)          FOR_USER="${2:-}"; shift ;;
         -h|--help)           usage; exit 0 ;;
         *) echo "Unknown option: $1" >&2; usage; exit 1 ;;
@@ -146,8 +161,34 @@ else
     [[ $EUID -ne 0 ]] || die "Run this as your normal user, not root, or pass --for-user NAME."
 fi
 [[ -n ${CONFIG_DST_OVERRIDE:-} ]] && CONFIG_DST="$CONFIG_DST_OVERRIDE"
-[[ -f /etc/arch-release ]] || die "This script targets Arch Linux."
-command -v pacman >/dev/null || die "pacman not found."
+
+# Arch or Fedora. Everything distro-specific below — package names, the package
+# manager, the initramfs tool, where Hyprland comes from — branches on DISTRO;
+# the configuration it deploys is identical on both.
+DISTRO=""
+DISTRO_NAME=""
+if [[ -r /etc/os-release ]]; then
+    # shellcheck disable=SC1091
+    DISTRO_NAME="$(. /etc/os-release; echo "${NAME:-}")"
+    _os_ids="$(. /etc/os-release; echo "${ID:-} ${ID_LIKE:-}")"
+    case " $_os_ids " in
+        *" arch "*)   DISTRO=arch ;;
+        *" fedora "*) DISTRO=fedora ;;
+    esac
+fi
+[[ -z $DISTRO && -f /etc/arch-release ]] && DISTRO=arch
+case "$DISTRO" in
+    arch)   command -v pacman >/dev/null || die "pacman not found." ;;
+    fedora) command -v dnf    >/dev/null || die "dnf not found." ;;
+    *)      die "This script targets Arch Linux or Fedora." ;;
+esac
+[[ -n $DISTRO_NAME ]] || DISTRO_NAME="Arch Linux"
+ARCH="$(uname -m)"
+
+if [[ $DISTRO == fedora && $DO_AUR -eq 1 ]]; then
+    warn "--aur is for Arch; ignoring it on Fedora"
+    DO_AUR=0
+fi
 [[ -d "$CONFIG_SRC" ]] || die "config/ directory not found next to install.sh"
 
 # Connectivity is checked where it is needed, not here — see require_network.
@@ -159,12 +200,14 @@ command -v pacman >/dev/null || die "pacman not found."
 # that will happily serve packages, and what matters is whether the mirrors can
 # be reached. It exercises DNS too, which a ping by IP would not.
 require_network() {
-    timeout 5 bash -c 'exec 3<>/dev/tcp/archlinux.org/443' 2>/dev/null && return 0
+    local host=archlinux.org
+    [[ $DISTRO == fedora ]] && host=fedoraproject.org
+    timeout 5 bash -c "exec 3<>/dev/tcp/$host/443" 2>/dev/null && return 0
     die "No network connectivity, and $1 needs it. Connect first (nmtui / iwctl)."
 }
 # $USER is not set inside arch-chroot, and `set -u` turns that into an abort
 # rather than an empty string. id -un always works.
-ok "Arch Linux, network up, running as ${FOR_USER:-$(id -un)}"
+ok "$DISTRO_NAME ($ARCH), running as ${FOR_USER:-$(id -un)}"
 [[ $DRY_RUN -eq 1 ]] && warn "dry run — nothing will be written"
 
 # ── GPU detection ─────────────────────────────────────────────────────────────
@@ -172,6 +215,12 @@ ok "Arch Linux, network up, running as ${FOR_USER:-$(id -un)}"
 # lspci, so detection works on a minimal install with no pciutils.
 #   0x1002 AMD/ATI   0x8086 Intel   0x10de NVIDIA
 #   0x1af4 virtio    0x15ad VMware  0x1234 QEMU/bochs
+#
+# ARM machines mostly have no PCI GPU. The GPU there is a platform device with
+# no vendor file, so it is identified by the kernel driver bound to it instead.
+# On Apple silicon that is two cards: `asahi` renders and `apple-drm` only
+# drives the displays. A display-only card is not a GPU and is skipped, or a
+# Mac would be written up as an unknown device and put on software rendering.
 GPU_VENDORS=()
 GPU_NAMES=()
 
@@ -226,37 +275,47 @@ detect_broadcom_wifi() {
 }
 
 detect_gpus() {
-    local dev card vendor id
+    local dev card vendor id driver name v
     for dev in /sys/class/drm/card*/device; do
-        [[ -r $dev/vendor ]] || continue
         card="$(basename "$(dirname "$dev")")"
         # Skip connector entries like card1-DP-3; we only want the device.
         [[ $card == *-* ]] && continue
 
-        vendor="$(cat "$dev/vendor" 2>/dev/null || true)"
-        id="$(cat "$dev/device" 2>/dev/null || true)"
+        if [[ -r $dev/vendor ]]; then
+            vendor="$(cat "$dev/vendor" 2>/dev/null || true)"
+            id="$(cat "$dev/device" 2>/dev/null || true)"
 
-        case "$vendor" in
-            0x1002) v=amd    ;;
-            0x8086) v=intel  ;;
-            0x10de) v=nvidia ;;
-            0x1af4|0x15ad|0x1234) v=virtual ;;
-            *)      v=unknown ;;
-        esac
+            case "$vendor" in
+                0x1002) v=amd    ;;
+                0x8086) v=intel  ;;
+                0x10de) v=nvidia ;;
+                0x1af4|0x15ad|0x1234) v=virtual ;;
+                *)      v=unknown ;;
+            esac
+
+            if command -v lspci >/dev/null; then
+                name="$(lspci -d "${vendor#0x}:${id#0x}" 2>/dev/null | head -1 | cut -d: -f3- | sed 's/^ *//' || true)"
+            else
+                name="$v device $id"
+            fi
+        else
+            driver="$(basename "$(readlink -f "$dev/driver" 2>/dev/null)")"
+            case "$driver" in
+                asahi)                                   v=apple ;;
+                panfrost|panthor|lima|v3d|msm|etnaviv)   v=soc ;;
+                virtio_gpu|virtio-gpu)                   v=virtual ;;
+                *) continue ;;   # display-only (apple-drm, simpledrm, ...)
+            esac
+            # The devicetree says what it is: apple,agx-t8112 on an M2.
+            name="$(tr '\0' '\n' < "$dev/of_node/compatible" 2>/dev/null | head -1 || true)"
+            name="${name:-$driver} ($driver driver)"
+        fi
 
         # Do not list the same vendor twice on a multi-card system.
-        local seen=0 existing
-        for existing in ${GPU_VENDORS[@]+"${GPU_VENDORS[@]}"}; do
-            [[ $existing == "$v" ]] && seen=1
-        done
-        [[ $seen -eq 1 ]] && continue
+        gpu_has "$v" && continue
 
         GPU_VENDORS+=("$v")
-        if command -v lspci >/dev/null; then
-            GPU_NAMES+=("$(lspci -d "${vendor#0x}:${id#0x}" 2>/dev/null | head -1 | cut -d: -f3- | sed 's/^ *//' || true)")
-        else
-            GPU_NAMES+=("$v device $id")
-        fi
+        GPU_NAMES+=("$name")
     done
 
     if [[ ${#GPU_VENDORS[@]} -eq 0 ]]; then
@@ -284,8 +343,37 @@ kernel_headers() {
 detect_gpus
 detect_broadcom_wifi
 
+# On Fedora the wl driver is RPM Fusion's akmod-wl, not something this script
+# installs. Blacklisting the in-kernel drivers without it would leave no wifi
+# at all, so on Fedora the card is only reported.
+BCM_UNHANDLED=""
+if [[ $DISTRO == fedora && -n $BCM_DRIVER ]]; then
+    BCM_UNHANDLED="$BCM_NAME"
+    BCM_DRIVER=""
+fi
+
+# ── login manager ─────────────────────────────────────────────────────────────
+# display-manager.service is an alias that only one unit can hold, and Fedora
+# Workstation ships with GDM holding it. GDM lists Hyprland's session files by
+# itself, so by default an existing display manager is left in charge and
+# greetd is not installed at all. --greetd replaces it.
+OTHER_DM="$(readlink /etc/systemd/system/display-manager.service 2>/dev/null || true)"
+OTHER_DM="${OTHER_DM##*/}"
+[[ $OTHER_DM == greetd.service ]] && OTHER_DM=""
+case "$DO_GREETD" in
+    auto) if [[ -n $OTHER_DM ]]; then DO_GREETD=0; else DO_GREETD=1; fi ;;
+    yes)  DO_GREETD=1 ;;
+    no)   DO_GREETD=0 ;;
+esac
+
 # ── package sets ──────────────────────────────────────────────────────────────
 # Grouped by purpose so it is obvious what to drop for a leaner system.
+#
+# The Arch lists come first and stay at column 0: starch's extract-packages.sh
+# builds the ISO's package list by pulling `^PKGS_...=(` through `^)` out of
+# this file with sed, so indenting them, or wrapping them in an `if`, silently
+# empties the ISO. Fedora's lists replace them further down, indented so the
+# extraction never sees them.
 
 PKGS_BASE=(
     base-devel git curl wget man-db man-pages
@@ -364,9 +452,6 @@ PKGS_DESKTOP=(
     # PKGS_THEME; this is the Python binding, and the only thing the settings
     # app adds to the image.
     python-gobject
-    # The boot splash. Escape still shows the text, which is the point of
-    # using plymouth rather than just passing `quiet`.
-    plymouth
 )
 PKGS_FONTS=(
     ttf-jetbrains-mono ttf-jetbrains-mono-nerd
@@ -385,6 +470,95 @@ PKGS_BLUETOOTH=( bluez bluez-utils blueman )
 # The 32-bit graphics drivers come from PKGS_GPU32, which is vendor-aware.
 PKGS_GAMING=( steam gamemode lib32-gamemode mangohud "${PKGS_GPU32[@]}" )
 
+# Fedora names things differently and does not carry quite the same things, so
+# on Fedora every list above is replaced, group for group.
+#
+# ${DISTRO:-}, not $DISTRO: the one-line arrays above make extract-packages.sh's
+# sed range run on to the next column-0 `)`, which is WANTED's, so this block is
+# evaluated there too — with set -u and no DISTRO.
+if [[ ${DISTRO:-} == fedora ]]; then
+    NVIDIA_NOTES=0
+    PKGS_BASE=(
+        git curl wget2-wget man-db man-pages
+        xdg-user-dirs xdg-utils
+        unzip zip 7zip
+        nano
+    )
+    # Fedora's mesa-vulkan-drivers carries every Mesa Vulkan driver at once —
+    # RADV, ANV, Honeykrisp for Apple silicon, PanVK, lavapipe — so unlike
+    # Arch the vendor adds little. On Asahi the Asahi COPR supplies Mesa when
+    # it is newer, and dnf picks that by itself.
+    PKGS_GPU=(
+        mesa-dri-drivers mesa-vulkan-drivers vulkan-loader vulkan-tools
+        libva libva-utils glx-utils
+        xorg-x11-server-Xwayland
+    )
+    PKGS_GPU32=()
+    for _v in "${GPU_VENDORS[@]}"; do
+        case "$_v" in
+            amd)    PKGS_GPU+=( mesa-va-drivers ) ;;
+            # The iHD driver is in RPM Fusion, not Fedora. Skipped with a
+            # warning if that repository is not enabled.
+            intel)  PKGS_GPU+=( intel-media-driver ) ;;
+            # The driver is RPM Fusion's akmod-nvidia, which wants Secure Boot
+            # handling this script should not guess at. See the notes at the end.
+            nvidia) NVIDIA_NOTES=1 ;;
+        esac
+    done
+    PKGS_AUDIO=(
+        pipewire pipewire-alsa pipewire-pulseaudio pipewire-jack-audio-connection-kit
+        wireplumber pavucontrol playerctl
+        alsa-utils
+    )
+    # PC sound firmware. Apple silicon has its own stack (asahi-audio), which
+    # the Remix installs.
+    [[ $ARCH == x86_64 ]] && PKGS_AUDIO+=( alsa-firmware alsa-sof-firmware )
+    # Fedora does not package Hyprland itself. These come from the nett00n
+    # COPR, which the system phase enables if nothing already provides them.
+    PKGS_HYPRLAND=(
+        hyprland uwsm
+        hyprpaper hyprlock hypridle hyprpicker hyprsunset
+        hyprpolkitagent
+        xdg-desktop-portal-hyprland xdg-desktop-portal-gtk
+        qt5-qtwayland qt6-qtwayland
+    )
+    # nwg-look and nwg-displays are not packaged for Fedora. starch-config
+    # covers the display side; GTK theming is in settings.ini and dconf.
+    PKGS_DESKTOP=(
+        waybar wofi mako libnotify
+        kitty
+        Thunar thunar-volman thunar-archive-plugin tumbler file-roller
+        gvfs gvfs-mtp udiskie
+        network-manager-applet
+        gnome-keyring
+        swayosd brightnessctl
+        grim slurp swappy wl-clipboard cliphist
+        imv mpv
+        ImageMagick jq
+        python3-gobject
+        dconf
+    )
+    # JetBrainsMono Nerd Font and the Nerd Font symbols are not packaged; the
+    # system phase fetches them from the Nerd Fonts release instead.
+    PKGS_FONTS=(
+        jetbrains-mono-fonts-all
+        fontawesome-fonts-all
+        google-noto-sans-fonts google-noto-serif-fonts google-noto-sans-mono-fonts
+        google-noto-color-emoji-fonts google-noto-sans-cjk-fonts
+    )
+    PKGS_THEME=( papirus-icon-theme adwaita-icon-theme gtk3 gtk4 )
+    PKGS_APPS=( firefox neovim vim-enhanced )
+    # starship is not packaged for Fedora, and nothing here depends on it.
+    PKGS_SHELL=( fastfetch btop ripgrep fd-find bat eza fzf zoxide )
+    # greetd-selinux: without its policy, SELinux stops greetd starting a session.
+    PKGS_GREETD=( greetd greetd-selinux tuigreet )
+    # bluetoothctl is part of bluez on Fedora.
+    PKGS_BLUETOOTH=( bluez blueman )
+    # On Fedora Asahi Remix, steam is the Asahi COPR's FEX-emulated build; on
+    # x86_64 it comes from RPM Fusion. Skipped with a warning where neither is.
+    PKGS_GAMING=( steam gamemode mangohud )
+fi
+
 # Everything this run is responsible for, honouring the feature flags.
 WANTED=(
     "${PKGS_BASE[@]}" "${PKGS_GPU[@]}" "${PKGS_AUDIO[@]}" "${PKGS_HYPRLAND[@]}"
@@ -396,13 +570,20 @@ WANTED=(
 [[ $DO_GAMING    -eq 1 ]] && WANTED+=( "${PKGS_GAMING[@]}" )
 # The wireless driver this card needs, if it needs one the kernel lacks. On
 # install media both are already present; this is what makes a plain run of
-# this script on an existing Arch install fix the wifi too.
-[[ $BCM_DRIVER == wl ]] && WANTED+=( broadcom-wl-dkms )
+# this script on an existing Arch install fix the wifi too. On Fedora the
+# driver is RPM Fusion's akmod-wl, which is left to the user.
+[[ $DISTRO == arch && $BCM_DRIVER == wl ]] && WANTED+=( broadcom-wl-dkms )
 
 # ── package helpers ───────────────────────────────────────────────────────────
 # True when a package is installed. Also handles package groups (base-devel),
-# which `pacman -Qq` never matches on their own name.
+# which `pacman -Qq` never matches on their own name. On Fedora, anything that
+# provides the name counts too.
 pkg_installed() {
+    if [[ $DISTRO == fedora ]]; then
+        rpm -q --quiet "$1" 2>/dev/null || rpm -q --quiet --whatprovides "$1" 2>/dev/null
+        return
+    fi
+
     pacman -Qq "$1" &>/dev/null && return 0
 
     pacman -Sg "$1" &>/dev/null || return 1
@@ -414,6 +595,16 @@ pkg_installed() {
 }
 
 unit_enabled() { systemctl is-enabled --quiet "$1" 2>/dev/null; }
+
+# Fedora packages none of the Nerd Fonts every config here names, so they are
+# fetched from the upstream release instead: JetBrainsMono Nerd Font for text,
+# Symbols Nerd Font for the icons waybar and wofi draw.
+NERD_FONTS=( JetBrainsMono NerdFontsSymbolsOnly )
+NERD_FONTS_DIR=/usr/local/share/fonts/nerd-fonts
+nerd_fonts_present() {
+    fc-list 'JetBrainsMono Nerd Font' family 2>/dev/null | grep -q . &&
+        fc-list 'Symbols Nerd Font' family 2>/dev/null | grep -q .
+}
 
 # Hyprland's config is Lua as of 0.55; .conf is removed in 0.57. The GPU blocks
 # below are still written in the old `env = NAME,value` shape because that is
@@ -453,6 +644,41 @@ for p in "${WANTED[@]}"; do
     pkg_installed "$p" || MISSING_PKGS+=("$p")
 done
 
+# Not everything exists for every Fedora machine: steam only where the Asahi
+# COPR or RPM Fusion carries it, the iHD driver only with RPM Fusion. Something
+# no enabled repository offers is reported rather than counted as missing, or
+# every re-run would decide the system phase is still needed and try again.
+#
+# Except while Hyprland itself is unavailable: that means its COPR is not
+# enabled yet, and the system phase is what enables it. What is still
+# unavailable after that is skipped by dnf and warned about there.
+UNAVAILABLE_PKGS=()
+if [[ $DISTRO == fedora && ${#MISSING_PKGS[@]} -gt 0 ]]; then
+    # Offline the query fails, or answers from stale metadata with nothing at
+    # all. Either way everything missing stays missing, the safe way round.
+    if _avail="$(dnf repoquery --quiet --available --qf '%{name}\n' "${MISSING_PKGS[@]}" 2>/dev/null)" \
+       && [[ -n $_avail ]]; then
+        if ! pkg_installed hyprland && ! grep -qx hyprland <<<"$_avail"; then
+            :   # the Hyprland COPR is not enabled yet; see above
+        else
+            _still=()
+            for p in "${MISSING_PKGS[@]}"; do
+                if grep -qxF "$p" <<<"$_avail"; then
+                    _still+=("$p")
+                else
+                    UNAVAILABLE_PKGS+=("$p")
+                fi
+            done
+            MISSING_PKGS=(${_still[@]+"${_still[@]}"})
+        fi
+    fi
+fi
+
+NERD_FONTS_READY=1
+if [[ $DISTRO == fedora ]] && ! nerd_fonts_present; then
+    NERD_FONTS_READY=0
+fi
+
 PENDING_UNITS=()
 unit_enabled NetworkManager.service || PENDING_UNITS+=(NetworkManager.service)
 [[ $DO_BLUETOOTH -eq 1 ]] && { unit_enabled bluetooth.service || PENDING_UNITS+=(bluetooth.service); }
@@ -464,7 +690,7 @@ if [[ $DO_GREETD -eq 0 ]] || grep -qs 'Managed by hyprland-setup' /etc/greetd/co
 fi
 
 MULTILIB_READY=1
-if [[ $DO_GAMING -eq 1 ]] && ! grep -qE '^\[multilib\]' /etc/pacman.conf; then
+if [[ $DISTRO == arch && $DO_GAMING -eq 1 ]] && ! grep -qE '^\[multilib\]' /etc/pacman.conf; then
     MULTILIB_READY=0
 fi
 
@@ -475,13 +701,21 @@ info "packages:  ${#MISSING_PKGS[@]} of ${#WANTED[@]} missing"
 # reconstructing the package list by hand from a machine that has already
 # rebooted.
 [[ ${#MISSING_PKGS[@]} -gt 0 ]] && info "           ${MISSING_PKGS[*]}"
+[[ ${#UNAVAILABLE_PKGS[@]} -gt 0 ]] && info "unavailable here, skipped: ${UNAVAILABLE_PKGS[*]}"
+[[ $DISTRO == fedora ]] && info "nerd fonts: $( ((NERD_FONTS_READY)) && echo installed || echo missing )"
 info "services:  ${#PENDING_UNITS[@]} pending"
-[[ $DO_GREETD  -eq 1 ]] && info "greetd:    $( ((GREETD_CONFIGURED)) && echo configured || echo "not configured" )"
-[[ $DO_GAMING  -eq 1 ]] && info "multilib:  $( ((MULTILIB_READY))    && echo enabled    || echo disabled )"
+if [[ $DO_GREETD -eq 1 ]]; then
+    info "greetd:    $( ((GREETD_CONFIGURED)) && echo configured || echo "not configured" )"
+    [[ -n $OTHER_DM ]] && info "           replaces $OTHER_DM"
+elif [[ -n $OTHER_DM ]]; then
+    info "login:     keeping $OTHER_DM (--greetd to replace it)"
+fi
+[[ $DISTRO == arch && $DO_GAMING -eq 1 ]] && info "multilib:  $( ((MULTILIB_READY))    && echo enabled    || echo disabled )"
 
 SYSTEM_COMPLETE=0
 if [[ ${#MISSING_PKGS[@]} -eq 0 && ${#PENDING_UNITS[@]} -eq 0 \
-      && $GREETD_CONFIGURED -eq 1 && $MULTILIB_READY -eq 1 ]]; then
+      && $GREETD_CONFIGURED -eq 1 && $MULTILIB_READY -eq 1 \
+      && $NERD_FONTS_READY -eq 1 ]]; then
     SYSTEM_COMPLETE=1
 fi
 
@@ -503,7 +737,7 @@ esac
 
 # Only ask for sudo if something actually needs root.
 if [[ $RUN_SYSTEM -eq 1 && $DRY_RUN -eq 0 && -z $FOR_USER ]]; then
-    info "requesting sudo (needed for pacman and systemd units)…"
+    info "requesting sudo (needed for the package manager and systemd units)…"
     sudo -v || die "sudo is required."
     while true; do sudo -n true; sleep 50; kill -0 "$$" 2>/dev/null || exit; done 2>/dev/null &
     SUDO_KEEPALIVE_PID=$!
@@ -520,144 +754,231 @@ run() {  # execute, or just narrate under --dry-run
 
 # ── system phase ──────────────────────────────────────────────────────────────
 if [[ $RUN_SYSTEM -eq 1 ]]; then
-    step "Tuning /etc/pacman.conf"
+    if [[ $DISTRO == arch ]]; then
+        step "Tuning /etc/pacman.conf"
 
-    tweak_pacman() {
-        local key="$1" line="$2"
-        if grep -qE "^\s*${key}" /etc/pacman.conf; then
-            ok "$key already set"
-        elif grep -qE "^#\s*${key}" /etc/pacman.conf; then
-            run $SUDO sed -i "s/^#\s*${key}.*/${line}/" /etc/pacman.conf
-            ok "enabled $key"
-        else
-            run $SUDO sed -i "/^\[options\]/a ${line}" /etc/pacman.conf
-            ok "enabled $key"
-        fi
-    }
-
-    tweak_pacman "Color"             "Color"
-    tweak_pacman "ParallelDownloads" "ParallelDownloads = 10"
-    tweak_pacman "VerbosePkgLists"   "VerbosePkgLists"
-
-    if [[ $DO_GAMING -eq 1 ]]; then
-        if [[ $MULTILIB_READY -eq 1 ]]; then
-            ok "multilib already enabled"
-        else
-            info "enabling [multilib] for 32-bit gaming libraries"
-            run $SUDO sed -i '/^#\[multilib\]/,/^#Include = .*mirrorlist/ s/^#//' /etc/pacman.conf
-            ok "multilib enabled"
-        fi
-    fi
-
-    # Only sync when something actually has to come down the wire. Installing
-    # from the ISO leaves every package already present, and the system phase
-    # still runs — the services need enabling, and that needs no network.
-    # Syncing anyway would make an otherwise entirely offline install fail on a
-    # machine that has not been connected yet.
-    if [[ ${#MISSING_PKGS[@]} -eq 0 && $DO_AUR -eq 0 && $DO_GAMING -eq 0 ]]; then
-        step "Packages"
-        ok "all ${#WANTED[@]} already installed; nothing to download"
-    else
-        step "Synchronising databases and updating the system"
-        require_network "installing packages"
-        run $SUDO pacman -Syu --noconfirm
-        ok "system up to date"
-    fi
-
-    # ── drivers this machine has no use for ───────────────────────────────────
-    # The install medium carries every vendor's driver, because it cannot know
-    # what it will be installed onto. Once that is known, the rest can go: an
-    # AMD laptop has no reason to keep 900MB of NVIDIA userspace, and a machine
-    # with no Broadcom card has no reason to keep two Broadcom drivers.
-    #
-    # Only ever removes what this script itself would have installed, and only
-    # what the detected hardware rules out. -Rn without the cascade: these are
-    # explicitly installed packages, and following their dependencies out would
-    # take shared libraries other things need.
-    step "Drivers not needed here"
-    unneeded=()
-
-    has_vendor() {
-        local want="$1" v
-        for v in ${GPU_VENDORS[@]+"${GPU_VENDORS[@]}"}; do
-            [[ $v == "$want" ]] && return 0
-        done
-        return 1
-    }
-
-    has_vendor nvidia || unneeded+=( nvidia-open-dkms nvidia-utils nvidia-settings
-                                     libva-nvidia-driver lib32-nvidia-utils )
-    has_vendor amd    || unneeded+=( vulkan-radeon lib32-vulkan-radeon )
-    has_vendor intel  || unneeded+=( vulkan-intel intel-media-driver lib32-vulkan-intel )
-
-    [[ $BCM_DRIVER == wl ]] || unneeded+=( broadcom-wl-dkms )
-
-    # dkms and the kernel headers exist on the medium to build the two modules
-    # above. With neither in use they are 310MB of build tooling for nothing —
-    # and a plain Arch install would not have them unless something asked.
-    if ! has_vendor nvidia && [[ $BCM_DRIVER != wl ]]; then
-        unneeded+=( dkms linux-headers )
-    fi
-
-    present=()
-    for _p in "${unneeded[@]}"; do
-        pacman -Qq "$_p" &>/dev/null && present+=("$_p")
-    done
-
-    if [[ ${#present[@]} -eq 0 ]]; then
-        ok "nothing to remove"
-    elif [[ $DRY_RUN -eq 1 ]]; then
-        info "[dry-run] would remove ${#present[@]}: ${present[*]}"
-    else
-        info "removing ${#present[@]} not needed on this hardware"
-        info "    ${present[*]}"
-        run $SUDO pacman -Rn --noconfirm "${present[@]}" || warn "some could not be removed"
-        ok "removed"
-    fi
-
-    step "Installing packages"
-    if [[ ${#MISSING_PKGS[@]} -eq 0 ]]; then
-        ok "all ${#WANTED[@]} packages already installed"
-    else
-        info "${#MISSING_PKGS[@]} to install: ${MISSING_PKGS[*]}"
-        run $SUDO pacman -S --needed --noconfirm "${MISSING_PKGS[@]}"
-        ok "packages installed"
-    fi
-
-    if [[ $DO_AUR -eq 1 ]]; then
-        step "AUR helper (paru)"
-        require_network "building paru"
-
-        # Ask paru to run rather than merely checking it is on $PATH. paru links
-        # libalpm, whose soname pacman bumps on major releases; a paru built
-        # against the old one stays installed and executable-looking but dies at
-        # startup with "libalpm.so.15: cannot open shared object file". Testing
-        # for the file alone reports success and repairs nothing.
-        paru_works() { command -v paru >/dev/null && paru --version >/dev/null 2>&1; }
-
-        if paru_works; then
-            ok "paru already installed"
-        elif [[ $DRY_RUN -eq 1 ]]; then
-            info "[dry-run] would build paru from the AUR"
-        else
-            if command -v paru >/dev/null; then
-                warn "paru is installed but will not run — rebuilding it"
-                info "$(ldd "$(command -v paru)" 2>/dev/null | grep 'not found' || echo 'broken install')"
+        tweak_pacman() {
+            local key="$1" line="$2"
+            if grep -qE "^\s*${key}" /etc/pacman.conf; then
+                ok "$key already set"
+            elif grep -qE "^#\s*${key}" /etc/pacman.conf; then
+                run $SUDO sed -i "s/^#\s*${key}.*/${line}/" /etc/pacman.conf
+                ok "enabled $key"
+            else
+                run $SUDO sed -i "/^\[options\]/a ${line}" /etc/pacman.conf
+                ok "enabled $key"
             fi
+        }
 
-            # Source package, not paru-bin. The -bin binary is compiled upstream
-            # against whatever libalpm existed at release time and goes stale on
-            # the next pacman bump; building here links against this machine's.
-            info "building paru from source (a few minutes)"
-            build_dir="$(mktemp -d)"
-            git clone --depth 1 https://aur.archlinux.org/paru.git "$build_dir/paru"
-            # -s fetch makedeps, -r drop them again after, -c clean the workdir.
-            ( cd "$build_dir/paru" && makepkg -src --noconfirm )
-            # pacman -U rather than makepkg -i, so replacing an older paru-bin
-            # is an ordinary conflict resolution instead of an error.
-            run $SUDO pacman -U --noconfirm "$build_dir"/paru/paru-*.pkg.tar.*
-            rm -rf "$build_dir"
-            paru_works && ok "paru installed" || warn "paru built but still will not run"
+        tweak_pacman "Color"             "Color"
+        tweak_pacman "ParallelDownloads" "ParallelDownloads = 10"
+        tweak_pacman "VerbosePkgLists"   "VerbosePkgLists"
+
+        if [[ $DO_GAMING -eq 1 ]]; then
+            if [[ $MULTILIB_READY -eq 1 ]]; then
+                ok "multilib already enabled"
+            else
+                info "enabling [multilib] for 32-bit gaming libraries"
+                run $SUDO sed -i '/^#\[multilib\]/,/^#Include = .*mirrorlist/ s/^#//' /etc/pacman.conf
+                ok "multilib enabled"
+            fi
+        fi
+
+        # Only sync when something actually has to come down the wire. Installing
+        # from the ISO leaves every package already present, and the system phase
+        # still runs — the services need enabling, and that needs no network.
+        # Syncing anyway would make an otherwise entirely offline install fail on a
+        # machine that has not been connected yet.
+        if [[ ${#MISSING_PKGS[@]} -eq 0 && $DO_AUR -eq 0 && $DO_GAMING -eq 0 ]]; then
+            step "Packages"
+            ok "all ${#WANTED[@]} already installed; nothing to download"
+        else
+            step "Synchronising databases and updating the system"
+            require_network "installing packages"
+            run $SUDO pacman -Syu --noconfirm
+            ok "system up to date"
+        fi
+
+        # ── drivers this machine has no use for ───────────────────────────────────
+        # The install medium carries every vendor's driver, because it cannot know
+        # what it will be installed onto. Once that is known, the rest can go: an
+        # AMD laptop has no reason to keep 900MB of NVIDIA userspace, and a machine
+        # with no Broadcom card has no reason to keep two Broadcom drivers.
+        #
+        # Only ever removes what this script itself would have installed, and only
+        # what the detected hardware rules out. -Rn without the cascade: these are
+        # explicitly installed packages, and following their dependencies out would
+        # take shared libraries other things need.
+        step "Drivers not needed here"
+        unneeded=()
+
+        has_vendor() {
+            local want="$1" v
+            for v in ${GPU_VENDORS[@]+"${GPU_VENDORS[@]}"}; do
+                [[ $v == "$want" ]] && return 0
+            done
+            return 1
+        }
+
+        has_vendor nvidia || unneeded+=( nvidia-open-dkms nvidia-utils nvidia-settings
+                                         libva-nvidia-driver lib32-nvidia-utils )
+        has_vendor amd    || unneeded+=( vulkan-radeon lib32-vulkan-radeon )
+        has_vendor intel  || unneeded+=( vulkan-intel intel-media-driver lib32-vulkan-intel )
+
+        [[ $BCM_DRIVER == wl ]] || unneeded+=( broadcom-wl-dkms )
+
+        # dkms and the kernel headers exist on the medium to build the two modules
+        # above. With neither in use they are 310MB of build tooling for nothing —
+        # and a plain Arch install would not have them unless something asked.
+        if ! has_vendor nvidia && [[ $BCM_DRIVER != wl ]]; then
+            unneeded+=( dkms linux-headers )
+        fi
+
+        present=()
+        for _p in "${unneeded[@]}"; do
+            pacman -Qq "$_p" &>/dev/null && present+=("$_p")
+        done
+
+        if [[ ${#present[@]} -eq 0 ]]; then
+            ok "nothing to remove"
+        elif [[ $DRY_RUN -eq 1 ]]; then
+            info "[dry-run] would remove ${#present[@]}: ${present[*]}"
+        else
+            info "removing ${#present[@]} not needed on this hardware"
+            info "    ${present[*]}"
+            run $SUDO pacman -Rn --noconfirm "${present[@]}" || warn "some could not be removed"
+            ok "removed"
+        fi
+
+        step "Installing packages"
+        if [[ ${#MISSING_PKGS[@]} -eq 0 ]]; then
+            ok "all ${#WANTED[@]} packages already installed"
+        else
+            info "${#MISSING_PKGS[@]} to install: ${MISSING_PKGS[*]}"
+            run $SUDO pacman -S --needed --noconfirm "${MISSING_PKGS[@]}"
+            ok "packages installed"
+        fi
+
+        if [[ $DO_AUR -eq 1 ]]; then
+            step "AUR helper (paru)"
+            require_network "building paru"
+
+            # Ask paru to run rather than merely checking it is on $PATH. paru links
+            # libalpm, whose soname pacman bumps on major releases; a paru built
+            # against the old one stays installed and executable-looking but dies at
+            # startup with "libalpm.so.15: cannot open shared object file". Testing
+            # for the file alone reports success and repairs nothing.
+            paru_works() { command -v paru >/dev/null && paru --version >/dev/null 2>&1; }
+
+            if paru_works; then
+                ok "paru already installed"
+            elif [[ $DRY_RUN -eq 1 ]]; then
+                info "[dry-run] would build paru from the AUR"
+            else
+                if command -v paru >/dev/null; then
+                    warn "paru is installed but will not run — rebuilding it"
+                    info "$(ldd "$(command -v paru)" 2>/dev/null | grep 'not found' || echo 'broken install')"
+                fi
+
+                # Source package, not paru-bin. The -bin binary is compiled upstream
+                # against whatever libalpm existed at release time and goes stale on
+                # the next pacman bump; building here links against this machine's.
+                info "building paru from source (a few minutes)"
+                build_dir="$(mktemp -d)"
+                git clone --depth 1 https://aur.archlinux.org/paru.git "$build_dir/paru"
+                # -s fetch makedeps, -r drop them again after, -c clean the workdir.
+                ( cd "$build_dir/paru" && makepkg -src --noconfirm )
+                # pacman -U rather than makepkg -i, so replacing an older paru-bin
+                # is an ordinary conflict resolution instead of an error.
+                run $SUDO pacman -U --noconfirm "$build_dir"/paru/paru-*.pkg.tar.*
+                rm -rf "$build_dir"
+                paru_works && ok "paru installed" || warn "paru built but still will not run"
+            fi
+        fi
+
+    else
+        # No whole-system upgrade first, unlike pacman -Syu on Arch: Fedora
+        # supports partial upgrades, and dnf updates whatever a new package
+        # actually needs.
+        step "Hyprland repository"
+        # Fedora does not package Hyprland. Whatever already provides it is
+        # kept, whether that is a build already installed or a COPR someone
+        # enabled by hand. The default COPR is enabled only when nothing does.
+        if pkg_installed hyprland; then
+            ok "hyprland $(rpm -q --qf '%{version}' hyprland) already installed — keeping it"
+        elif dnf repoquery --quiet --available hyprland 2>/dev/null | grep -q .; then
+            ok "hyprland is available from an enabled repository"
+        else
+            require_network "enabling the Hyprland COPR"
+            if ! dnf copr --help >/dev/null 2>&1; then
+                run $SUDO dnf install -y 'dnf-command(copr)'
+            fi
+            run $SUDO dnf copr enable -y "$HYPRLAND_COPR"
+            ok "enabled the $HYPRLAND_COPR COPR"
+        fi
+
+        step "Installing packages"
+        if [[ ${#MISSING_PKGS[@]} -eq 0 ]]; then
+            ok "all wanted packages already installed"
+        else
+            require_network "installing packages"
+            info "${#MISSING_PKGS[@]} to install: ${MISSING_PKGS[*]}"
+            # --skip-unavailable, so that something no enabled repository has
+            # for this machine — steam away from Asahi, the iHD driver without
+            # RPM Fusion — is reported instead of failing the whole transaction.
+            run $SUDO dnf install -y --skip-unavailable "${MISSING_PKGS[@]}"
+            if [[ $DRY_RUN -eq 0 ]]; then
+                skipped=()
+                for _p in "${MISSING_PKGS[@]}"; do
+                    pkg_installed "$_p" || skipped+=("$_p")
+                done
+                if [[ ${#skipped[@]} -eq 0 ]]; then
+                    ok "packages installed"
+                else
+                    warn "not available here, skipped: ${skipped[*]}"
+                fi
+            fi
+        fi
+
+        # The configuration is Lua, which Hyprland reads from 0.55 on. An older
+        # build would start with none of it applied.
+        if pkg_installed hyprland; then
+            hypr_ver="$(rpm -q --qf '%{version}' hyprland)"
+            if [[ "$(printf '%s\n' "$HYPRLAND_MIN" "$hypr_ver" | sort -V | head -1)" != "$HYPRLAND_MIN" ]]; then
+                warn "hyprland $hypr_ver is older than $HYPRLAND_MIN, which this Lua config needs"
+            fi
+        fi
+
+        step "Nerd Fonts"
+        if [[ $NERD_FONTS_READY -eq 1 ]]; then
+            ok "JetBrainsMono and Symbols Nerd Fonts already installed"
+        elif [[ $DRY_RUN -eq 1 ]]; then
+            info "[dry-run] would install ${NERD_FONTS[*]} into $NERD_FONTS_DIR"
+        else
+            require_network "fetching the Nerd Fonts"
+            nf_tmp="$(mktemp -d)"
+            for _f in "${NERD_FONTS[@]}"; do
+                curl -fsSL --retry 3 -o "$nf_tmp/$_f.tar.xz" \
+                    "https://github.com/ryanoasis/nerd-fonts/releases/latest/download/$_f.tar.xz"
+                mkdir -p "$nf_tmp/$_f"
+                tar -xJf "$nf_tmp/$_f.tar.xz" -C "$nf_tmp/$_f"
+                # Only the family the configs name. The archive also carries
+                # the Mono and Propo variants, which triple its size.
+                case "$_f" in
+                    JetBrainsMono) _glob='JetBrainsMonoNerdFont-*.ttf' ;;
+                    *)             _glob='*.ttf' ;;
+                esac
+                run $SUDO install -d "$NERD_FONTS_DIR/$_f"
+                find "$nf_tmp/$_f" -maxdepth 1 -name "$_glob" -print0 \
+                    | xargs -0 -r $SUDO install -m644 -t "$NERD_FONTS_DIR/$_f/"
+            done
+            rm -rf "$nf_tmp"
+            run $SUDO fc-cache -f "$NERD_FONTS_DIR" >/dev/null
+            if nerd_fonts_present; then
+                ok "installed into $NERD_FONTS_DIR"
+            else
+                warn "downloaded, but fontconfig does not see them yet"
+            fi
         fi
     fi
 
@@ -704,6 +1025,10 @@ if [[ $RUN_SYSTEM -eq 1 ]]; then
             info "uwsm session file not found; launching Hyprland directly"
         fi
 
+        # Arch's package creates a `greeter` account, Fedora's a `greetd` one.
+        greeter_user=greeter
+        [[ $DISTRO == fedora ]] && greeter_user=greetd
+
         if [[ $DRY_RUN -eq 1 ]]; then
             info "[dry-run] would write /etc/greetd/config.toml"
         else
@@ -714,11 +1039,18 @@ if [[ $RUN_SYSTEM -eq 1 ]]; then
 vt = 1
 
 [default_session]
-command = "tuigreet --remember --remember-user-session --asterisks --time --greeting 'Arch Linux' --cmd '${session_cmd}'"
-user = "greeter"
+command = "tuigreet --remember --remember-user-session --asterisks --time --greeting '${DISTRO_NAME}' --cmd '${session_cmd}'"
+user = "${greeter_user}"
 EOF
-            $SUDO install -d -o greeter -g greeter -m 755 /var/cache/tuigreet 2>/dev/null || true
+            $SUDO install -d -o "$greeter_user" -g "$greeter_user" -m 755 /var/cache/tuigreet 2>/dev/null || true
             ok "wrote /etc/greetd/config.toml"
+        fi
+
+        # Only reached with another display manager enabled under --greetd.
+        # It holds the display-manager.service alias greetd needs.
+        if [[ -n $OTHER_DM ]]; then
+            run $SUDO systemctl disable "$OTHER_DM"
+            ok "disabled $OTHER_DM"
         fi
 
         unit_enabled greetd.service && ok "greetd.service already enabled" || {
@@ -817,66 +1149,6 @@ if [[ $DO_CONFIGS -eq 1 ]]; then
         run $SUDO install -Dm644 "$app_src/starch-config.desktop" \
             /usr/share/applications/starch-config.desktop
         ok "starch-config installed — SUPER+I, or \"Settings\" in the launcher"
-    fi
-
-    # ── boot splash ───────────────────────────────────────────────────────────
-    # Plymouth draws over the boot instead of scrolling kernel output past. The
-    # theme is ours; `quiet splash` on the kernel command line is what actually
-    # turns it on, and that belongs to the boot loader rather than here — on
-    # install media starch's build.sh sets it, on an installed system the
-    # installer does.
-    #
-    # Escape switches to the text at any point. That is Plymouth's own
-    # behaviour and the reason for using it rather than just hiding the output:
-    # a boot that fails should still be diagnosable without a rescue disk.
-    step "Boot splash"
-    splash_src="$SCRIPT_DIR/splash/theme"
-    splash_dst=/usr/share/plymouth/themes/starch
-    if [[ ! -d $splash_src ]]; then
-        warn "splash theme missing from this checkout — skipping"
-    elif [[ $DRY_RUN -eq 1 ]]; then
-        info "[dry-run] would install the splash theme to $splash_dst"
-    elif ! command -v plymouth-set-default-theme >/dev/null && [[ -z $FOR_USER ]]; then
-        warn "plymouth is not installed — skipping the splash"
-    else
-        run $SUDO rm -rf "$splash_dst"
-        run $SUDO install -d "$splash_dst"
-        run $SUDO cp "$splash_src"/* "$splash_dst/"
-        # Via a temp file rather than a heredoc into install(1), to match the
-        # lid step above and to keep `run` a plain argv wrapper.
-        ply_tmp="$(mktemp)"
-        {
-            echo "# Generated by hyprland-setup."
-            echo "[Daemon]"
-            echo "Theme=starch"
-            echo "ShowDelay=0"
-        } > "$ply_tmp"
-        run $SUDO install -Dm644 "$ply_tmp" /etc/plymouth/plymouthd.conf
-        rm -f "$ply_tmp"
-        ok "splash theme installed"
-
-        # The initramfs needs the plymouth hook, or the theme is never loaded
-        # and the boot falls back to text with none of the output `quiet`
-        # suppressed — the worst of both.
-        #
-        # Only off the install media. There, Calamares builds the initramfs at
-        # a fixed point in its sequence and this script runs after it, so the
-        # hook is added by starch's own installer at the right moment instead.
-        if [[ -z $FOR_USER ]]; then
-            if grep -qE '^HOOKS=.*\bplymouth\b' /etc/mkinitcpio.conf; then
-                ok "initramfs already has the plymouth hook"
-            else
-                run $SUDO sed -i -E \
-                    's/^(HOOKS=\([^)]*\budev\b)/\1 plymouth/' /etc/mkinitcpio.conf
-                if grep -qE '^HOOKS=.*\bplymouth\b' /etc/mkinitcpio.conf; then
-                    run $SUDO mkinitcpio -P
-                    ok "plymouth hook added and the initramfs rebuilt"
-                else
-                    warn "could not add the plymouth hook to /etc/mkinitcpio.conf"
-                fi
-            fi
-            info "the splash needs 'quiet splash' on the kernel command line"
-        fi
     fi
 
     # ── monitors ──────────────────────────────────────────────────────────────
@@ -1015,7 +1287,10 @@ if [[ $DO_CONFIGS -eq 1 ]]; then
     # know the hardware — and if two of them can claim the same device, which
     # one wins is a race that resolves differently between boots.
     step "Wireless"
-    if [[ -z $BCM_DRIVER ]]; then
+    if [[ -n $BCM_UNHANDLED ]]; then
+        warn "$BCM_UNHANDLED needs the proprietary wl driver, which Fedora does"
+        warn "not carry. It is akmod-wl in RPM Fusion's nonfree repository."
+    elif [[ -z $BCM_DRIVER ]]; then
         ok "no Broadcom card needing a driver the kernel does not have"
     elif [[ $DRY_RUN -eq 1 ]]; then
         info "[dry-run] would configure the $BCM_DRIVER driver for: $BCM_NAME"
@@ -1115,6 +1390,27 @@ EOF
 # Running in a VM. virtio-gpu with venus, falling back to software rendering.
 env = LIBVA_DRIVER_NAME,
 env = WLR_RENDERER_ALLOW_SOFTWARE,1
+
+EOF
+                    ;;
+                apple)
+                    cat >> "$gpu_tmp" <<'EOF'
+# ── Apple silicon ─────────────────────────────────────────────────────────────
+# The Asahi GPU driver: Mesa's asahi for OpenGL, Honeykrisp for Vulkan. Nothing
+# needs setting — Mesa finds both on its own. The media engine has no VA-API
+# driver yet, so video decodes on the CPU and LIBVA_DRIVER_NAME stays unset.
+#
+# Rendering (asahi) and the displays (apple-drm) are separate DRM cards, and
+# Hyprland pairs them without help.
+
+EOF
+                    ;;
+                soc)
+                    cat >> "$gpu_tmp" <<'EOF'
+# ── ARM SoC GPU ───────────────────────────────────────────────────────────────
+# Mali (panfrost/panthor), Adreno (msm), VideoCore (v3d) or Vivante (etnaviv).
+# Mesa drives these without any variables. Hardware video decode, where there
+# is any, goes through V4L2 rather than VA-API, so nothing is set for it.
 
 EOF
                     ;;
@@ -1265,10 +1561,17 @@ EOF
         info "[dry-run] would write the system dconf defaults"
     elif command -v dconf >/dev/null; then
         run $SUDO install -d /etc/dconf/db/local.d /etc/dconf/profile
-        printf '%s\n' \
-            "user-db:user" \
-            "system-db:local" \
-            | run $SUDO tee /etc/dconf/profile/user >/dev/null
+        # Fedora already has a profile, naming more databases than this one
+        # (site, distro). Replacing it would drop those, so only add `local`
+        # where it is missing.
+        if [[ ! -f /etc/dconf/profile/user ]]; then
+            printf '%s\n' \
+                "user-db:user" \
+                "system-db:local" \
+                | run $SUDO tee /etc/dconf/profile/user >/dev/null
+        elif ! grep -qx 'system-db:local' /etc/dconf/profile/user; then
+            echo "system-db:local" | run $SUDO tee -a /etc/dconf/profile/user >/dev/null
+        fi
         printf '%s\n' \
             "# Generated by hyprland-setup." \
             "[org/gnome/desktop/interface]" \
@@ -1311,7 +1614,14 @@ EOF
 fi
 
 # ── NVIDIA follow-up ──────────────────────────────────────────────────────────
-if [[ ${NVIDIA_NOTES:-0} -eq 1 ]]; then
+if [[ ${NVIDIA_NOTES:-0} -eq 1 && $DISTRO == fedora ]]; then
+    step "NVIDIA notes"
+    warn "Fedora does not carry the NVIDIA driver, so none was installed."
+    info "It is akmod-nvidia in RPM Fusion's nonfree repository:"
+    info "    https://rpmfusion.org/Howto/NVIDIA"
+    info "With Secure Boot on, the module has to be signed and its key enrolled"
+    info "before it will load — that page covers it."
+elif [[ ${NVIDIA_NOTES:-0} -eq 1 ]]; then
     step "NVIDIA notes"
     info "Arch already ships 'options nvidia_drm modeset=1', and fbdev follows it"
     info "automatically on driver 570+, so no modprobe changes are needed."
@@ -1406,9 +1716,13 @@ else
 
   ${C_BLUE}Next:${C_RESET}
     1. Reboot:  ${C_DIM}sudo reboot${C_RESET}
-$( [[ $DO_GREETD -eq 1 ]] \
-     && echo "    2. Log in at the tuigreet prompt — it launches Hyprland for you." \
-     || echo "    2. Log in on a TTY and run: uwsm start hyprland-uwsm.desktop" )
+$( if [[ $DO_GREETD -eq 1 ]]; then
+       echo "    2. Log in at the tuigreet prompt — it launches Hyprland for you."
+   elif [[ -n $OTHER_DM ]]; then
+       echo "    2. At the ${OTHER_DM%.service} login screen, pick \"Hyprland (uwsm-managed)\" as the session."
+   else
+       echo "    2. Log in on a TTY and run: uwsm start hyprland-uwsm.desktop"
+   fi )
     3. Press ${C_YELLOW}SUPER + slash${C_RESET} for the keybind cheatsheet.
 
   ${C_BLUE}Essential keys:${C_RESET}

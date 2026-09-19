@@ -13,11 +13,14 @@ local mod = "SUPER"
 
 -- hyprctl reports every Lua bind's dispatcher as "__lua", so the SUPER+/
 -- cheatsheet has nothing to show unless each bind carries a description.
--- This wrapper makes the description a required third argument.
+-- This wrapper makes the description a required third argument. It copies
+-- opts rather than writing into it: the media keys share one opts table, and
+-- a description set on that table would label every later bind that uses it.
 local function bind(key, dispatcher, desc, opts)
-    opts = opts or {}
-    opts.description = desc
-    hl.bind(key, dispatcher, opts)
+    local o = {}
+    for k, v in pairs(opts or {}) do o[k] = v end
+    o.description = desc
+    hl.bind(key, dispatcher, o)
 end
 
 -- ── launching ───────────────────────────────────────────────────────────────
@@ -195,6 +198,12 @@ hl.bind("XF86MonBrightnessDown", hl.dsp.exec_cmd("swayosd-client --brightness lo
 hl.bind("XF86KbdBrightnessUp",   hl.dsp.exec_cmd("~/.config/hypr/scripts/kbd-backlight.sh up"),   osd)
 hl.bind("XF86KbdBrightnessDown", hl.dsp.exec_cmd("~/.config/hypr/scripts/kbd-backlight.sh down"), osd)
 hl.bind("XF86KbdLightOnOff",     hl.dsp.exec_cmd("~/.config/hypr/scripts/kbd-backlight.sh toggle"), osd)
+
+-- Apple dropped the keyboard backlight keys in 2020, so on an Apple silicon
+-- MacBook the ones above never fire. SUPER turns the screen brightness keys
+-- into keyboard brightness keys instead.
+bind(mod .. " + XF86MonBrightnessUp",   hl.dsp.exec_cmd("~/.config/hypr/scripts/kbd-backlight.sh up"),   "Keyboard backlight up", osd)
+bind(mod .. " + XF86MonBrightnessDown", hl.dsp.exec_cmd("~/.config/hypr/scripts/kbd-backlight.sh down"), "Keyboard backlight down", osd)
 
 local lockedOnly = { locked = true }
 bind("XF86AudioMute",    hl.dsp.exec_cmd("swayosd-client --output-volume mute-toggle"), "AudioMute", lockedOnly)

@@ -432,7 +432,7 @@ PKGS_AUDIO=(
 PKGS_HYPRLAND=(
     hyprland uwsm
     hyprpaper hyprlock hypridle hyprpicker hyprsunset
-    hyprpolkitagent
+    hyprpolkitagent hyprland-guiutils
     xdg-desktop-portal-hyprland xdg-desktop-portal-gtk
     qt5-wayland qt6-wayland
 )
@@ -518,7 +518,7 @@ if [[ ${DISTRO:-} == fedora ]]; then
     PKGS_HYPRLAND=(
         hyprland uwsm
         hyprpaper hyprlock hypridle hyprpicker hyprsunset
-        hyprpolkitagent
+        hyprpolkitagent hyprland-guiutils
         xdg-desktop-portal-hyprland xdg-desktop-portal-gtk
         qt5-qtwayland qt6-qtwayland
     )

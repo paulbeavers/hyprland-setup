@@ -3,7 +3,7 @@
  * The colour names are not defined here. theme.sh renders the active palette
  * to waybar/colors.css as @define-color declarations, and theme.py prepends
  * that file to this one before handing the pair to GTK. So this stylesheet
- * only ever names roles — @base, @accent, @overlay — and switching theme with
+ * only ever names roles — @base, @mauve, @overlay — and switching theme with
  * SUPER+SHIFT+T restyles this app along with the bar.
  *
  * Deliberately no libadwaita. Its stylesheet encodes GNOME's design language
@@ -85,7 +85,7 @@ window.sc-light .sc-sidebar {
 
 .sc-app-title-accent {
   font-weight: 700;
-  color: @accent;
+  color: @mauve;
 }
 
 .sc-window-close {
@@ -133,7 +133,7 @@ list {
 }
 
 .sc-sidebar row:selected {
-  background-color: @accent;
+  background-color: @mauve;
   color: @crust;
   font-weight: 700;
 }
@@ -159,7 +159,7 @@ list {
 }
 
 .sc-section-title {
-  color: @accent;
+  color: @mauve;
   font-size: 11px;
   font-weight: 700;
   margin: 16px 4px 6px 4px;
@@ -231,9 +231,9 @@ entry:focus {
 }
 
 button.sc-accent {
-  background-color: @accent;
+  background-color: @mauve;
   color: @crust;
-  border-color: @accent;
+  border-color: @mauve;
   font-weight: 700;
 }
 
@@ -277,7 +277,7 @@ switch {
 }
 
 switch:checked {
-  background-color: @accent;
+  background-color: @mauve;
 }
 
 switch > slider {
@@ -299,7 +299,7 @@ scale trough {
 }
 
 scale highlight {
-  background-color: @accent;
+  background-color: @mauve;
   border-radius: 999px;
 }
 

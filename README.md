@@ -266,12 +266,6 @@ Or straight from Hyprland: `hyprctl binds` (raw), `hyprctl -j binds` (JSON).
   is only applied where `RESOLUTION / SCALE` is a whole number, which Hyprland
   requires; on a display it does not divide (1366x768, 1600x900) the script
   falls back to scale 1 for that monitor and says so.
-- **One accent colour, named once.** The focused border, the active workspace,
-  the selected launcher row, a checked switch and the lock ring all use
-  `accent`, which `theme.sh` derives from the active palette — the theme's own
-  `sapphire` unless the `.theme` file names another role, e.g. `accent = teal`.
-  Changing what the desktop highlights with is one line, not a dozen edits
-  across five config formats.
 - **Two tiling layouts.** `theme.lua` sets `general:layout` (dwindle by
   default) and `SUPER + T` flips the running session between dwindle and
   Hyprland's built-in scrolling layout — a PaperWM-style tape of columns.

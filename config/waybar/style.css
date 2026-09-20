@@ -61,7 +61,7 @@ window#waybar {
 }
 
 #workspaces label.active {
-  background-color: @accent;
+  background-color: @mauve;
   color: @crust;
   padding: 0 14px;
 }

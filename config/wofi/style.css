@@ -28,7 +28,6 @@
 @define-color blue      #89b4fa;
 @define-color lavender  #b4befe;
 @define-color mauve     #cba6f7;
-@define-color accent    #cba6f7;
 @define-color pink      #f5c2e7;
 /* theme colours end */
 
@@ -39,7 +38,7 @@
 
 #window {
   background-color: alpha(@base, 0.92);
-  border: 2px solid @accent;
+  border: 2px solid @mauve;
   border-radius: 14px;
   color: @text;
 }
@@ -59,7 +58,7 @@
 }
 
 #input:focus {
-  border-color: @accent;
+  border-color: @mauve;
   /* GTK draws its own focus ring on top otherwise. */
   outline: none;
   box-shadow: none;
@@ -84,7 +83,7 @@
 }
 
 #entry:selected {
-  background-color: @accent;
+  background-color: @mauve;
   color: @crust;
 }
 

@@ -79,8 +79,14 @@ load_theme() {
     #
     # A theme may name its own by setting `accent = <hex>` or `accent = teal`;
     # anything that is not six hex digits is read as the name of another role.
-    # Without one it is sapphire, the palette's light blue.
-    local want="${C[accent]:-sapphire}"
+    #
+    # Without one it is mauve, which is what every one of these files was
+    # hardcoded to before this role existed, and — for the Catppuccin themes
+    # that most of these follow — what upstream calls the accent. Defaulting to
+    # anything else does not restyle the desktop, it redefines the theme: pick
+    # sapphire here and Catppuccin Mocha stops looking like Catppuccin Mocha,
+    # and Nord and Gruvbox change with it.
+    local want="${C[accent]:-mauve}"
     if [[ $want =~ ^[0-9a-fA-F]{6}$ ]]; then
         C[accent]="$want"
     else

@@ -35,7 +35,7 @@ FALLBACK = """
 @define-color blue      #89b4fa;
 @define-color lavender  #b4befe;
 @define-color mauve     #cba6f7;
-@define-color accent    #74c7ec;
+@define-color accent    #cba6f7;
 @define-color pink      #f5c2e7;
 """
 
@@ -63,8 +63,8 @@ def _accent_fallback(palette: str) -> str:
     """
     if re.search(r"@define-color\s+accent\b", palette):
         return ""
-    match = re.search(r"@define-color\s+sapphire\s+(#[0-9a-fA-F]{6})", palette)
-    return "\n@define-color accent %s;\n" % (match.group(1) if match else "#74c7ec")
+    match = re.search(r"@define-color\s+mauve\s+(#[0-9a-fA-F]{6})", palette)
+    return "\n@define-color accent %s;\n" % (match.group(1) if match else "#cba6f7")
 
 
 def _css() -> str:

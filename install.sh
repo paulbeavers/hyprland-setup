@@ -41,11 +41,10 @@ DEFAULT_SCALE_DEN=3
 DEFAULT_THEME=catppuccin-mocha-blue
 
 # Wallpaper applied on a first install, on the same terms as DEFAULT_THEME: a
-# re-run keeps whatever was last picked with SUPER+W. One of the images the
-# hyprland package ships, so nothing has to be generated or downloaded. If it
-# is missing — a hyprland release that ships a different set — the generated
-# gradient is used instead.
-DEFAULT_WALLPAPER=/usr/share/hypr/wall2.png
+# re-run keeps whatever was last picked with SUPER+W. Names a design in
+# wallpapers/ rather than a path, because each design ships two renders and
+# which one fits depends on the panel in front of it.
+DEFAULT_WALLPAPER=starch-lattice
 
 # Fedora does not package Hyprland. When nothing on the machine provides it
 # yet, this COPR is enabled; an existing build or COPR is always kept.
@@ -1506,19 +1505,40 @@ EOF
 
     # ── wallpaper ─────────────────────────────────────────────────────────────
     step "Wallpaper"
-    wallpaper="$HOME/Pictures/wallpapers/default.png"
+    wall_dir="$HOME/Pictures/wallpapers"
     # The directory is what SUPER+W lists, so create it even when there is
     # nothing to put in it yet — an empty picker beats one that errors out.
-    [[ $DRY_RUN -eq 1 ]] || mkdir -p "$(dirname "$wallpaper")"
-    if [[ -f $wallpaper ]]; then
-        ok "wallpaper already present"
-    elif [[ $DRY_RUN -eq 1 ]]; then
-        info "[dry-run] would generate a ${max_w}x${max_h} gradient"
+    [[ $DRY_RUN -eq 1 ]] || mkdir -p "$wall_dir"
+
+    # Both renders of a design are laid out for their width rather than being
+    # one image stretched, so the panel's aspect picks between them and its
+    # pixel count does not. 19/10 sits between 16:9 and the 64:27 of an
+    # ultrawide, so anything wider than a widescreen gets the wide layout.
+    if (( max_w * 10 > max_h * 19 )); then
+        wallpaper="$wall_dir/$DEFAULT_WALLPAPER-5120x2160.png"
+    else
+        wallpaper="$wall_dir/$DEFAULT_WALLPAPER-3840x2160.png"
+    fi
+
+    # Copied rather than symlinked so they survive the repo moving, and with -n
+    # so an image swapped out by hand stays swapped across a re-run.
+    if [[ $DRY_RUN -eq 1 ]]; then
+        info "[dry-run] would install the starch wallpapers into $wall_dir"
+    elif compgen -G "$SCRIPT_DIR/wallpapers/*.png" >/dev/null; then
+        cp -n "$SCRIPT_DIR"/wallpapers/*.png "$wall_dir/"
+        ok "installed the starch wallpapers into $wall_dir"
+    fi
+
+    # Only reached when the shipped images are not there at all — a checkout
+    # missing wallpapers/. A gradient still beats a black screen.
+    if [[ -f $wallpaper || $DRY_RUN -eq 1 ]]; then
+        :
     elif command -v magick >/dev/null; then
+        wallpaper="$wall_dir/default.png"
         magick -size "${max_w}x${max_h}" gradient:'#1e1e2e-#11111b' "$wallpaper"
         ok "generated ${max_w}x${max_h} gradient at $wallpaper"
     else
-        warn "imagemagick not available; drop an image at $wallpaper"
+        warn "imagemagick not available; drop an image in $wall_dir"
     fi
     # hyprpaper.conf and hyprlock.conf both name the current wallpaper, and both
     # were just overwritten by the config sync. Put the recorded pick back.
@@ -1536,10 +1556,8 @@ EOF
         warn "wallpaper.sh is not executable; wallpaper left as configured"
     elif [[ -r $active_file ]] && "$wall_script" --no-reload --restore; then
         ok "restored $(basename "$(<"$active_file")")"
-    elif [[ -f $DEFAULT_WALLPAPER ]] && "$wall_script" --no-reload --set "$DEFAULT_WALLPAPER"; then
-        ok "set the default wallpaper ($(basename "$DEFAULT_WALLPAPER"))"
     elif [[ -f $wallpaper ]] && "$wall_script" --no-reload --set "$wallpaper"; then
-        ok "set $(basename "$wallpaper")"
+        ok "set the default wallpaper ($(basename "$wallpaper"))"
     else
         warn "no wallpaper could be set"
     fi

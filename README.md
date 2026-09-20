@@ -266,6 +266,12 @@ Or straight from Hyprland: `hyprctl binds` (raw), `hyprctl -j binds` (JSON).
   is only applied where `RESOLUTION / SCALE` is a whole number, which Hyprland
   requires; on a display it does not divide (1366x768, 1600x900) the script
   falls back to scale 1 for that monitor and says so.
+- **The wallpaper is generated, not downloaded.** `wallpapers/` holds the
+  starch lattice at 3840x2160 and 5120x2160 and the `make-wallpaper.sh` that
+  produced them, from the same mark as the boot splash. `install.sh` copies
+  both into `~/Pictures/wallpapers` and picks by the panel's aspect — the wide
+  render is laid out for the extra width rather than stretched. The
+  `DEFAULT_WALLPAPER` at the top of `install.sh` names the design, not a file.
 - **Two tiling layouts.** `theme.lua` sets `general:layout` (dwindle by
   default) and `SUPER + T` flips the running session between dwindle and
   Hyprland's built-in scrolling layout — a PaperWM-style tape of columns.

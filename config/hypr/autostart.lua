@@ -26,8 +26,10 @@ hl.on("hyprland.start", function()
     hl.exec_cmd("systemctl --user start hyprpolkitagent")
     hl.exec_cmd("/usr/bin/gnome-keyring-daemon --start --components=secrets")
 
-    -- Shell components.
-    hl.exec_cmd("waybar")
+    -- Shell components. waybar goes through its own launcher, which starts it
+    -- with SIGRTMIN+1 ignored: the refresh signal below is fatal to a waybar
+    -- that has not installed its handler yet. scripts/waybar.sh has the story.
+    hl.exec_cmd("~/.config/hypr/scripts/waybar.sh")
     hl.exec_cmd("mako")
     hl.exec_cmd("hyprpaper")
 
@@ -92,8 +94,12 @@ end)
 --  say so.
 --------------------------------------------------------------------------------
 
+-- -x, so the substring does not also match scripts/waybar.sh in the instant
+-- before it execs. That launcher is what keeps an early signal — one sent
+-- while waybar is still starting, when SIGRTMIN+1 still has its default
+-- action of killing the process — from taking the bar down with it.
 local function refresh_workspaces()
-    hl.exec_cmd("pkill -RTMIN+1 waybar")
+    hl.exec_cmd("pkill -RTMIN+1 -x waybar")
 end
 
 for _, event in ipairs({

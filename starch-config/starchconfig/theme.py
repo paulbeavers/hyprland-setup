@@ -35,6 +35,7 @@ FALLBACK = """
 @define-color blue      #89b4fa;
 @define-color lavender  #b4befe;
 @define-color mauve     #cba6f7;
+@define-color accent    #74c7ec;
 @define-color pink      #f5c2e7;
 """
 
@@ -46,7 +47,24 @@ def palette_css() -> str:
         return FALLBACK
     # A colors.css that somehow defines nothing would leave every colour
     # undefined and GTK would drop the rules that use them, so check.
-    return text if "@define-color" in text else FALLBACK
+    if "@define-color" not in text:
+        return FALLBACK
+    return text + _accent_fallback(text)
+
+
+def _accent_fallback(palette: str) -> str:
+    """Define @accent if the palette predates it.
+
+    theme.sh grew an accent role, but a machine whose colors.css was rendered
+    before that has no @accent — and GTK silently drops every rule naming a
+    colour it does not know, which would strip the selection, the switches and
+    the buttons rather than fail loudly. Fall back to the palette's own light
+    blue, or to Catppuccin's if there is not one.
+    """
+    if re.search(r"@define-color\s+accent\b", palette):
+        return ""
+    match = re.search(r"@define-color\s+sapphire\s+(#[0-9a-fA-F]{6})", palette)
+    return "\n@define-color accent %s;\n" % (match.group(1) if match else "#74c7ec")
 
 
 def _css() -> str:

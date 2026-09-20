@@ -7,7 +7,8 @@
 #     theme.sh --current        slug of the theme in effect
 #     theme.sh --no-reload      skip signalling the running apps (install time)
 #
-# A theme is 19 colour roles in ~/.config/hypr/themes/<slug>.theme. Applying one
+# A theme is 19 colour roles in ~/.config/hypr/themes/<slug>.theme, plus a
+# twentieth, `accent`, derived from them: see load_theme. Applying one
 # renders those roles into whatever form each app understands:
 #
 #   hypr/colors.lua     role = "hex" table   required by theme.lua
@@ -70,6 +71,22 @@ load_theme() {
                 lavender mauve pink; do
         [[ -n ${C[$role]:-} ]] || die "$file is missing the '$role' colour"
     done
+
+    # The accent is the one colour the desktop uses to mean "this one": the
+    # focused border, the active workspace, the selected row, the switch that
+    # is on. It was mauve, hardcoded in a dozen files, which made changing it a
+    # dozen edits. Now it is a role like any other.
+    #
+    # A theme may name its own by setting `accent = <hex>` or `accent = teal`;
+    # anything that is not six hex digits is read as the name of another role.
+    # Without one it is sapphire, the palette's light blue.
+    local want="${C[accent]:-sapphire}"
+    if [[ $want =~ ^[0-9a-fA-F]{6}$ ]]; then
+        C[accent]="$want"
+    else
+        [[ -n ${C[$want]:-} ]] || die "$file: accent names '$want', which is not a colour here"
+        C[accent]="${C[$want]}"
+    fi
 }
 
 # Write to a temp file in the same directory and move it into place, so a
@@ -94,7 +111,7 @@ render_hypr() {
         local role
         for role in crust mantle base surface0 surface1 overlay subtext text \
                     rosewater red peach yellow green teal sapphire blue \
-                    lavender mauve pink; do
+                    lavender mauve pink accent; do
             printf '    %-9s = "%s",\n' "$role" "${C[$role]}"
         done
         echo "}"
@@ -105,7 +122,7 @@ define_colors() {
     local role
     for role in crust mantle base surface0 surface1 overlay subtext text \
                 rosewater red peach yellow green teal sapphire blue \
-                lavender mauve pink; do
+                lavender mauve pink accent; do
         printf '@define-color %-9s #%s;\n' "$role" "${C[$role]}"
     done
 }
@@ -160,7 +177,7 @@ render_kitty() {
         echo "bell_border_color     #${C[yellow]}"
         echo
         echo "active_tab_foreground   #${C[crust]}"
-        echo "active_tab_background   #${C[mauve]}"
+        echo "active_tab_background   #${C[accent]}"
         echo "inactive_tab_foreground #${C[text]}"
         echo "inactive_tab_background #${C[mantle]}"
         echo "tab_bar_background      #${C[crust]}"
@@ -201,7 +218,7 @@ render_mako() {
         echo
         echo "background-color=#${C[base]}e6"
         echo "text-color=#${C[text]}"
-        echo "border-color=#${C[mauve]}"
+        echo "border-color=#${C[accent]}"
         echo "progress-color=over #${C[surface1]}"
         echo
         echo "[urgency=low]"
@@ -210,7 +227,7 @@ render_mako() {
         echo "default-timeout=4000"
         echo
         echo "[urgency=normal]"
-        echo "border-color=#${C[mauve]}"
+        echo "border-color=#${C[accent]}"
         echo
         echo "[urgency=critical]"
         echo "border-color=#${C[red]}"
@@ -228,12 +245,12 @@ patch_hyprlock() {
     [[ -w $conf ]] || return 0
     tmp="$(mktemp "${conf}.XXXXXX")"
     awk -v c_base="${C[base]}"       -v c_text="${C[text]}" \
-        -v c_mauve="${C[mauve]}"     -v c_red="${C[red]}" \
+        -v c_accent="${C[accent]}"   -v c_red="${C[red]}" \
         -v c_surface="${C[surface0]}" -v c_subtext="${C[subtext]}" '
         function setvar(n, v) { return sprintf("$%-7s = rgb(%s)", n, v) }
         /^[[:space:]]*\$base[[:space:]]*=/    { print setvar("base",    c_base);    next }
         /^[[:space:]]*\$text[[:space:]]*=/    { print setvar("text",    c_text);    next }
-        /^[[:space:]]*\$mauve[[:space:]]*=/   { print setvar("mauve",   c_mauve);   next }
+        /^[[:space:]]*\$accent[[:space:]]*=/  { print setvar("accent",  c_accent);  next }
         /^[[:space:]]*\$red[[:space:]]*=/     { print setvar("red",     c_red);     next }
         /^[[:space:]]*\$surface[[:space:]]*=/ { print setvar("surface", c_surface); next }
         # Pango markup inside hyprlang escapes "#" as "##".
@@ -249,7 +266,7 @@ patch_waybar_json() {
     local conf="$CFG/waybar/config.jsonc" tmp
     [[ -w $conf ]] || return 0
     tmp="$(mktemp "${conf}.XXXXXX")"
-    awk -v months="${C[mauve]}"   -v days="${C[text]}"  -v weeks="${C[sapphire]}" \
+    awk -v months="${C[accent]}"   -v days="${C[text]}"  -v weeks="${C[sapphire]}" \
         -v weekdays="${C[peach]}" -v today="${C[red]}" '
         function recolor(c) { sub(/#[0-9a-fA-F]{6}/, "#" c); }
         /"months"/   { recolor(months)   } 

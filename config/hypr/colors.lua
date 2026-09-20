@@ -7,4 +7,7 @@ return {
     red = "f38ba8", peach = "fab387", yellow = "f9e2af",
     green = "a6e3a1", teal = "94e2d5", sapphire = "74c7ec",
     blue = "89b4fa", lavender = "b4befe", mauve = "cba6f7", pink = "f5c2e7",
+    -- Derived by theme.sh from the active palette; sapphire unless a theme
+    -- names another role. Present here so theme.lua works before it runs.
+    accent = "74c7ec",
 }

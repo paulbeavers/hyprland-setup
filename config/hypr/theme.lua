@@ -20,7 +20,7 @@ hl.config({
 
         col = {
             -- 45deg makes the gradient read as a light source.
-            active_border   = { colors = { rgb(c.mauve), rgb(c.blue) }, angle = 45 },
+            active_border   = { colors = { rgb(c.accent), rgb(c.blue) }, angle = 45 },
             inactive_border = rgb(c.surface0),
         },
 
@@ -98,7 +98,7 @@ hl.config({
 
     group = {
         col = {
-            border_active   = { colors = { rgb(c.mauve), rgb(c.blue) }, angle = 45 },
+            border_active   = { colors = { rgb(c.accent), rgb(c.blue) }, angle = 45 },
             border_inactive = rgb(c.surface0),
         },
         groupbar = {
@@ -108,7 +108,7 @@ hl.config({
             height      = 16,
             gradients   = true,
             col = {
-                active   = rgb(c.mauve),
+                active   = rgb(c.accent),
                 inactive = rgb(c.surface0),
             },
             text_color = rgb(c.text),

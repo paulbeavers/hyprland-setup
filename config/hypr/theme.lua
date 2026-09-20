@@ -44,7 +44,14 @@ hl.config({
             enabled      = true,
             range        = 20,
             render_power = 3,
-            color        = "rgba(" .. c.crust .. "aa)",
+            -- Not from the palette. This was c.crust, which is the darkest
+            -- colour in a dark theme and the lightest-but-one in a light
+            -- theme — so on Catppuccin Latte every window got a pale halo
+            -- rather than a shadow. A shadow is the absence of light; it does
+            -- not take the scheme's colour. Black at the same alpha is
+            -- indistinguishable from crust on the dark themes, where crust is
+            -- already all but black.
+            color        = "rgba(000000aa)",
             offset       = { 0, 4 },
         },
 

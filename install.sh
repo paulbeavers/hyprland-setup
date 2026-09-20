@@ -38,7 +38,7 @@ DEFAULT_SCALE_DEN=3
 # Colour scheme applied on a first install. A re-run keeps whatever was last
 # picked with SUPER+SHIFT+T instead, so this only ever decides the starting
 # point. Must match a filename in config/hypr/themes/ without the extension.
-DEFAULT_THEME=catppuccin-mocha
+DEFAULT_THEME=catppuccin-mocha-blue
 
 # Wallpaper applied on a first install, on the same terms as DEFAULT_THEME: a
 # re-run keeps whatever was last picked with SUPER+W. One of the images the

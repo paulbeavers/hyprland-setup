@@ -254,11 +254,21 @@ detect_broadcom_wifi() {
         id="$(cat "$dev/device")"
 
         case "$id" in
+            # Only cards the in-kernel drivers cannot drive. Check any
+            # addition against brcmfmac's own alias table before adding it:
+            #
+            #     modinfo brcmfmac | grep -oiE 'd0000[0-9A-F]{4}'
+            #
+            # 43ba (BCM43602) and 43a3 (BCM4350) were on this list and are
+            # claimed by brcmfmac, which also ships their firmware. Listing
+            # them blacklisted the driver that works and loaded wl, which
+            # cannot bind them — a 2013 15" MacBook Pro is a BCM43602 and had
+            # no wireless at all, on the medium and once installed.
+            #
             # 43a0 BCM4360   — 2013 retina MacBook Pro
             # 4331 BCM4331   — 2011-2012 MacBook Pro, and the non-retina 2013
-            # 43b1 BCM4352   43ba BCM43602   43a3 BCM4350
-            # 432b BCM4322   4353 BCM43224   4315 BCM4312
-            0x43a0|0x4331|0x43b1|0x43ba|0x43a3|0x432b|0x4353|0x4315)
+            # 43b1 BCM4352   432b BCM4322   4353 BCM43224   4315 BCM4312
+            0x43a0|0x4331|0x43b1|0x432b|0x4353|0x4315)
                 BCM_DRIVER=wl ;;
             *)
                 continue ;;

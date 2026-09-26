@@ -88,13 +88,34 @@ apply() {
     # daemon is skipped under --no-reload, and during an install there is no
     # session to talk to anyway.
     [[ $LIVE -eq 1 ]] || return 0
-    if ! hyprctl hyprpaper wallpaper ",$img" >/dev/null 2>&1; then
-        pkill -x hyprpaper 2>/dev/null || true
-        hyprpaper >/dev/null 2>&1 &
-        sleep 1
-        hyprctl hyprpaper wallpaper ",$img" >/dev/null 2>&1 \
-            || die "hyprpaper would not accept $img"
-    fi
+
+    # This IPC call is the only thing that actually puts an image on screen.
+    # hyprpaper does not apply wallpapers from its own config file — it finds
+    # the output, logs "Monitor <name> has no target: no wp will be created"
+    # and draws nothing — so the configs written above are a record of the
+    # choice, not the mechanism.
+    #
+    # autostart.lua starts hyprpaper and calls this script in the same breath,
+    # so the first attempts land before hyprpaper's socket exists. That is a
+    # race, and it has to be waited out rather than guessed at: the previous
+    # version waited a single second, and on install media — reading hyprpaper
+    # and its libraries off the medium with a cold cache — that was not close
+    # to enough. Worse, it killed the hyprpaper autostart had just started and
+    # then died, so the desktop came up black.
+    for _ in $(seq 1 40); do
+        hyprctl hyprpaper wallpaper ",$img" >/dev/null 2>&1 && return 0
+        sleep 0.25
+    done
+
+    # Ten seconds without an answer means hyprpaper is not running or is
+    # wedged, which is the only case where restarting it is the right move.
+    pkill -x hyprpaper 2>/dev/null || true
+    hyprpaper >/dev/null 2>&1 &
+    for _ in $(seq 1 20); do
+        sleep 0.25
+        hyprctl hyprpaper wallpaper ",$img" >/dev/null 2>&1 && return 0
+    done
+    die "hyprpaper would not accept $img"
 }
 
 # Rewrite the preload/wallpaper lines in place, leaving the comments alone.

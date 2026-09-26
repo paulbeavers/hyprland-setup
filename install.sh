@@ -1702,9 +1702,26 @@ if [[ $DO_CONFIGS -eq 1 && $DRY_RUN -eq 0 ]]; then
         fi
     fi
 
-    if command -v hyprctl >/dev/null && [[ -n $sig ]]; then
-        errors="$(HYPRLAND_INSTANCE_SIGNATURE="$sig" hyprctl reload 2>/dev/null >/dev/null; \
-                  HYPRLAND_INSTANCE_SIGNATURE="$sig" hyprctl configerrors 2>/dev/null || true)"
+    if [[ -n $FOR_USER ]]; then
+        # Configuring someone else's system, from the installer. They have no
+        # session to reload, and the only compositor reachable from here is the
+        # installer's own: start-installer hands Calamares
+        # HYPRLAND_INSTANCE_SIGNATURE, configure-desktop inherits it, so $sig
+        # names the *live* session. Reloading that applies the target machine's
+        # config to the machine doing the installing, half way through the
+        # install. Never do it from here.
+        info "configured for $FOR_USER; after first login, verify with:"
+        info "    hyprctl configerrors"
+    elif command -v hyprctl >/dev/null && [[ -n $sig ]]; then
+        # Both calls inside one group, with || true on the group. install.sh
+        # runs under `set -Eeuo pipefail`, and the -E is the trap here: errtrace
+        # propagates the ERR trap into command substitutions, so a failing
+        # `hyprctl reload` fired it and died even though the *last* command
+        # carried || true. Only the group form suppresses it — verified both
+        # ways. This is what ended an otherwise finished install with
+        # "failed at line 1707: ... hyprctl reload".
+        errors="$( { HYPRLAND_INSTANCE_SIGNATURE="$sig" hyprctl reload >/dev/null 2>&1; \
+                     HYPRLAND_INSTANCE_SIGNATURE="$sig" hyprctl configerrors 2>/dev/null; } || true )"
         if [[ -z $errors ]] || grep -qi 'no errors' <<<"$errors"; then
             ok "Hyprland reloaded with no config errors"
         else

@@ -102,10 +102,20 @@ apply() {
     # and its libraries off the medium with a cold cache — that was not close
     # to enough. Worse, it killed the hyprpaper autostart had just started and
     # then died, so the desktop came up black.
-    for _ in $(seq 1 40); do
-        hyprctl hyprpaper wallpaper ",$img" >/dev/null 2>&1 && return 0
+    # One line to /tmp so a boot that comes up with no wallpaper can be
+    # diagnosed from the machine it happened on. hyprpaper answers "ok" to
+    # this call whether or not it has a surface to paint on, and 0.8.4 has no
+    # query verb, so the reply cannot be trusted and the log is the only
+    # record of what was attempted.
+    local log="${WALLPAPER_LOG:-/tmp/wallpaper.log}" n=0
+    for n in $(seq 1 40); do
+        if hyprctl hyprpaper wallpaper ",$img" >/dev/null 2>&1; then
+            printf '%s applied after %d attempt(s): %s\n' "$(date +%T)" "$n" "$img" >> "$log" 2>/dev/null
+            return 0
+        fi
         sleep 0.25
     done
+    printf '%s hyprpaper did not answer in 10s; restarting it\n' "$(date +%T)" >> "$log" 2>/dev/null
 
     # Ten seconds without an answer means hyprpaper is not running or is
     # wedged, which is the only case where restarting it is the right move.

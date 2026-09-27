@@ -92,6 +92,50 @@ is a multiple of 1/120 *and* divides the resolution into whole pixels both
 ways. Hyprland accepts anything and then silently snaps, so a config can say
 1.5 while the session runs at 1.6. `scales.py` enumerates the legal ones.
 
+## Two traps that cost a day each
+
+**kitty remembers being maximized, and asks for it again.** Every terminal on
+an installed system came up covering the screen with the tiled windows behind
+it — only kitty, only installs, never the live medium. It was not a window
+rule. kitty defaults `remember_window_size` to yes: it records the OS window's
+size *and maximize state* in `~/.cache/kitty/main.json` and asks the compositor
+for the same again on every new window. `SUPER+SHIFT+F` fixed the window on
+screen and the next one came back maximized, because the cache still said so.
+`kitty.conf` now sets `remember_window_size no`; under a tiling compositor the
+geometry is the tiler's decision. It never showed on the medium because the
+live user's home is a fresh overlay each boot, so the cache never survived to
+be read — which is the shape of every "installs but not live" bug here.
+
+**Never kill a hyprpaper that is running.** `autostart.lua` starts hyprpaper
+and calls `wallpaper.sh --restore` in the same breath, so the first IPC
+attempts land before its socket exists. The old fallback waited one second,
+then killed hyprpaper and restarted it. When a second caller was added to "fix"
+the missing wallpaper, the two ran concurrently and each destroyed the daemon
+the other was waiting for; `/tmp/wallpaper.log` showed two "did not answer in
+10s" entries seven seconds apart, which one caller cannot produce. It now
+starts hyprpaper only if none is running and waits twenty seconds.
+
+`wallpaper.sh` writes a line to `/tmp/wallpaper.log` on the way through. Keep
+it: `hyprctl hyprpaper wallpaper` answers "ok" whether or not hyprpaper has a
+surface to paint on, and 0.8.4 has no verb to ask what it is showing, so the
+reply proves nothing and the log is the only record of what was attempted.
+
+## Broadcom: check the kernel's table, not a datasheet
+
+`WL_IDS` in `install.sh` and `installer/broadcom-live` is the list of cards the
+in-kernel drivers *cannot* drive. Two were wrong — 43ba (BCM43602) and 43a3
+(BCM4350) — and brcmfmac claims both outright and ships their firmware, so
+listing them blacklisted the driver that works and loaded `wl`, which cannot
+bind them. A 2013 15" MacBook Pro had no wireless at all as a result. Before
+adding an id:
+
+    modinfo brcmfmac | grep -oiE 'd0000[0-9A-F]{4}'
+
+If brcmfmac claims it, `wl` is the wrong answer. And `wl` matches on PCI
+*class*, not device id, so it is autoloaded for cards it cannot drive and
+races the right driver — which is why a card that is not on the list now gets
+`blacklist wl` written for it rather than nothing.
+
 ## Do not run sudo from a tool call
 
 There is no TTY, so sudo cannot prompt, and PAM counts each failure. With

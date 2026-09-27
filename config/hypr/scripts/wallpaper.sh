@@ -117,14 +117,27 @@ apply() {
     done
     printf '%s hyprpaper did not answer in 10s; restarting it\n' "$(date +%T)" >> "$log" 2>/dev/null
 
-    # Ten seconds without an answer means hyprpaper is not running or is
-    # wedged, which is the only case where restarting it is the right move.
-    pkill -x hyprpaper 2>/dev/null || true
-    hyprpaper >/dev/null 2>&1 &
-    for _ in $(seq 1 20); do
+    # Never kill a hyprpaper that is running. autostart.lua starts one and
+    # calls this script in the same breath, and live.lua used to call it a
+    # second time a few seconds later — so two copies of this function ran at
+    # once, each killing the other's hyprpaper and then waiting for the daemon
+    # it had just destroyed. The log showed two "did not answer in 10s" lines
+    # seven seconds apart, which is impossible for one caller.
+    #
+    # Start one only if there genuinely is none, then keep waiting. A slow
+    # machine — or a medium reading hyprpaper off the stick with a cold cache —
+    # can take well over ten seconds to open its socket.
+    if ! pgrep -x hyprpaper >/dev/null 2>&1; then
+        hyprpaper >/dev/null 2>&1 &
+    fi
+    for _ in $(seq 1 80); do
         sleep 0.25
-        hyprctl hyprpaper wallpaper ",$img" >/dev/null 2>&1 && return 0
+        hyprctl hyprpaper wallpaper ",$img" >/dev/null 2>&1 && {
+            printf '%s applied on the second pass: %s\n' "$(date +%T)" "$img" >> "$log" 2>/dev/null
+            return 0
+        }
     done
+    printf '%s gave up; hyprpaper never accepted %s\n' "$(date +%T)" "$img" >> "$log" 2>/dev/null
     die "hyprpaper would not accept $img"
 }
 

@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Install this repo's hooks into .git/hooks.
+#
+# Hooks live in .git/, which git does not track, so a fresh clone has none —
+# and CLAUDE.md tells you the submodule pin is automated. On a clone without
+# this run, that statement is false, which is worse than no automation at all.
+#
+#     ./tools/git-hooks/install
+set -euo pipefail
+here="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# --absolute-git-dir, because --git-path returns a path relative to the repo
+# root and this script runs from tools/git-hooks.
+dest="$(git -C "$here" rev-parse --absolute-git-dir)/hooks"
+mkdir -p "$dest"
+for hook in "$here"/*; do
+    name="$(basename "$hook")"
+    [[ $name == install ]] && continue
+    install -m 755 "$hook" "$dest/$name"
+    echo "installed $name -> $dest/$name"
+done

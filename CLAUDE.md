@@ -136,6 +136,20 @@ If brcmfmac claims it, `wl` is the wrong answer. And `wl` matches on PCI
 races the right driver — which is why a card that is not on the list now gets
 `blacklist wl` written for it rather than nothing.
 
+## Install the hooks on a fresh clone
+
+`.git/hooks` is not tracked, so a clone has none — and starch's CLAUDE.md says
+the submodule pin is automated. On a clone that has not run this, that
+statement is false, which is worse than no automation: the next session will
+trust it and ship an ISO missing the fix it was built for, which is what
+happened twice before the hook existed.
+
+    ./tools/git-hooks/install
+
+`tools/git-hooks/post-commit` is the tracked copy. It finds starch as a sibling
+of this repo; set `STARCH_REPO` if they are not side by side. It acts only when
+both repos are on `main`.
+
 ## Do not run sudo from a tool call
 
 There is no TTY, so sudo cannot prompt, and PAM counts each failure. With

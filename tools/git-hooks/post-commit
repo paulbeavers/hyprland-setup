@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+# Keep ~/starch's submodule pointing at whatever was just committed here.
+#
+# ~/hyprland-setup and ~/starch/hyprland-setup are separate clones of the same
+# repo. The ISO is built from the submodule, so a commit here reaches a build
+# only once the pin moves — and forgetting that has already shipped an ISO
+# missing the change it was built for, twice.
+#
+# Only on main, and only when starch is on main. A commit on a release branch
+# such as 2026-09 is a fix for a release that has already shipped; pinning main
+# to it would drag the next release backwards onto a maintenance commit. If you
+# want a release branch's commit in a release branch of starch, do it there by
+# hand — deliberately, which is the point.
+#
+# Never fails the commit: a hook that can block committing is worse than one
+# that occasionally cannot reach the network.
+set -uo pipefail
+# Sibling of this repo by default, so a clone anywhere works. Override with
+# STARCH_REPO when the two are not side by side.
+STARCH="${STARCH_REPO:-$(cd "$(git rev-parse --show-toplevel)/../starch" 2>/dev/null && pwd)}"
+[[ -n ${STARCH:-} ]] || exit 0
+[[ -d $STARCH/.git ]] || exit 0
+
+branch="$(git rev-parse --abbrev-ref HEAD)"
+if [[ $branch != main ]]; then
+    echo "post-commit: on '$branch', not main — leaving starch's pin alone" >&2
+    exit 0
+fi
+
+sha="$(git rev-parse HEAD)"
+subj="$(git log -1 --format=%s)"
+
+{
+    git push -q origin HEAD 2>/dev/null \
+        || echo "post-commit: could not push hyprland-setup; the bump below may not resolve for anyone else"
+
+    cd "$STARCH" || exit 0
+    sbranch="$(git rev-parse --abbrev-ref HEAD)"
+    if [[ $sbranch != main ]]; then
+        echo "post-commit: starch is on '$sbranch', not main — not moving its pin"
+        exit 0
+    fi
+
+    git submodule update --remote hyprland-setup >/dev/null 2>&1 \
+        || { git -C hyprland-setup fetch -q origin 2>/dev/null; git -C hyprland-setup checkout -q "$sha" 2>/dev/null; }
+
+    if [[ "$(git -C hyprland-setup rev-parse HEAD 2>/dev/null)" != "$sha" ]]; then
+        echo "post-commit: submodule is not at ${sha:0:7} — bump it by hand"
+        exit 0
+    fi
+    if git diff --quiet HEAD -- hyprland-setup; then
+        echo "post-commit: starch pin already at ${sha:0:7}"
+        exit 0
+    fi
+    git add hyprland-setup
+    git commit -q -m "Bump hyprland-setup: $subj" \
+        -m "Recorded automatically by hyprland-setup's post-commit hook." \
+        && echo "post-commit: starch pin -> ${sha:0:7} ($subj)"
+    git push -q origin HEAD 2>/dev/null || echo "post-commit: starch commit made but not pushed"
+} >&2
+exit 0

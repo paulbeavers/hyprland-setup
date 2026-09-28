@@ -174,7 +174,7 @@ vendor-specific is hardcoded in the shipped configs.
 | Browser | `firefox` |
 | Editors | `neovim`, `vim` |
 | Files | `thunar` + `gvfs` + `udiskie` |
-| Lock / idle / wallpaper | `hyprlock`, `hypridle`, `hyprpaper` |
+| Lock / idle / wallpaper | `hyprlock`, `hypridle`, `swaybg` |
 | Audio | PipeWire + WirePlumber |
 | GPU | Mesa + the driver for your detected card (see above) |
 | Screenshots | `grim` + `slurp` + `swappy` |
@@ -203,7 +203,6 @@ config/hypr/
 
   hyprlock.conf    lock screen        (hyprlock's own format)
   hypridle.conf    idle timeouts      (hypridle's own format)
-  hyprpaper.conf   wallpaper          (hyprpaper's own format)
 
 generated, never shipped:
   monitors.lua     written at install time from your connected displays

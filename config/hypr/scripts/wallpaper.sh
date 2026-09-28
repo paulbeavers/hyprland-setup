@@ -11,21 +11,21 @@
 #     wallpaper.sh --random     set a random one, no menu (handy in autostart)
 #     wallpaper.sh --restore    re-apply the recorded choice (install time)
 #     wallpaper.sh --print      list what would be offered, one path per line
-#     wallpaper.sh --no-reload  write the configs but do not talk to hyprpaper
+#     wallpaper.sh --no-reload  record the choice but do not put it on screen
 #
-# The choice is recorded in ~/.config/hypr/.active-wallpaper. hyprpaper.conf and
-# hyprlock.conf are both rewritten from it, and both are files the installer
+# The choice is recorded in ~/.config/hypr/.active-wallpaper, and hyprlock.conf
+# is rewritten from it so the lock screen matches. Both are files the installer
 # syncs, so --restore is how a re-run puts your pick back after the sync.
 #
-# Note: hyprpaper v0.8.4 rejects `preload`, `reload` and `unload` over hyprctl
-# — `wallpaper` is the only verb it accepts, and it loads the image itself, so
-# that single call is the whole apply path.
+# The wallpaper itself is drawn by swaybg, which takes the image as an argument
+# — no daemon, no socket, nothing to wait for. It replaced hyprpaper, whose
+# apply is an IPC call that answers "ok" whether or not it painted anything,
+# and which on install media never answered at all.
 set -euo pipefail
 
 CFG="${XDG_CONFIG_HOME:-$HOME/.config}"
 WALLPAPER_DIR="${WALLPAPER_DIR:-$HOME/Pictures/wallpapers}"
 SYSTEM_DIR="${SYSTEM_WALLPAPER_DIR:-/usr/share/hypr}"
-HYPRPAPER_CONF="${HYPRPAPER_CONF:-$CFG/hypr/hyprpaper.conf}"
 HYPRLOCK_CONF="${HYPRLOCK_CONF:-$CFG/hypr/hyprlock.conf}"
 ACTIVE_FILE="${ACTIVE_WALLPAPER_FILE:-$CFG/hypr/.active-wallpaper}"
 LIVE=1
@@ -74,102 +74,51 @@ collect() {
         || die "no images in $WALLPAPER_DIR or $SYSTEM_DIR"
 }
 
-# Point hyprpaper at the image, then make it stick. Restarting the daemon is
-# the fallback for the very first run, when nothing is listening yet.
+# Record the choice, then put it on screen with swaybg.
 apply() {
     local img="$1"
     [[ -f $img ]] || die "no such image: $img"
-    persist "$img"
     persist_lock "$img"
     mkdir -p "${ACTIVE_FILE%/*}"
     printf '%s\n' "$img" > "$ACTIVE_FILE"
 
-    # Writing the configs is the part that must always happen. Talking to the
-    # daemon is skipped under --no-reload, and during an install there is no
-    # session to talk to anyway.
+    # Recording it is the part that must always happen. Putting it on screen is
+    # skipped under --no-reload, and during an install there is no session to
+    # put it on.
     [[ $LIVE -eq 1 ]] || return 0
 
-    # This IPC call is the only thing that actually puts an image on screen.
-    # hyprpaper does not apply wallpapers from its own config file — it finds
-    # the output, logs "Monitor <name> has no target: no wp will be created"
-    # and draws nothing — so the configs written above are a record of the
-    # choice, not the mechanism.
+    # swaybg takes the image as an argument, so there is no daemon protocol, no
+    # socket to appear and nothing to race. That is the whole reason it is here.
+    # hyprpaper's apply is an hyprctl call that returns "ok" whether or not it
+    # has a surface to paint on, and 0.8.4 offers no way to ask what it is
+    # showing — so three rounds of timeout tuning could not tell a lost race
+    # from a call that succeeded and drew nothing. On the medium it never
+    # answered at all: "did not answer in 10s", then "would not accept", after
+    # twenty seconds of waiting, on every boot.
     #
-    # autostart.lua starts hyprpaper and calls this script in the same breath,
-    # so the first attempts land before hyprpaper's socket exists. That is a
-    # race, and it has to be waited out rather than guessed at: the previous
-    # version waited a single second, and on install media — reading hyprpaper
-    # and its libraries off the medium with a cold cache — that was not close
-    # to enough. Worse, it killed the hyprpaper autostart had just started and
-    # then died, so the desktop came up black.
-    # One line to /tmp so a boot that comes up with no wallpaper can be
-    # diagnosed from the machine it happened on. hyprpaper answers "ok" to
-    # this call whether or not it has a surface to paint on, and 0.8.4 has no
-    # query verb, so the reply cannot be trusted and the log is the only
-    # record of what was attempted.
-    local log="${WALLPAPER_LOG:-/tmp/wallpaper.log}" n=0
-    for n in $(seq 1 40); do
-        if hyprctl hyprpaper wallpaper ",$img" >/dev/null 2>&1; then
-            printf '%s applied after %d attempt(s): %s\n' "$(date +%T)" "$n" "$img" >> "$log" 2>/dev/null
-            return 0
-        fi
-        sleep 0.25
-    done
-    printf '%s hyprpaper did not answer in 10s; restarting it\n' "$(date +%T)" >> "$log" 2>/dev/null
+    # Changing the wallpaper means replacing the process. Start the new one
+    # before killing the old so the bare compositor never shows between them.
+    local log="${WALLPAPER_LOG:-/tmp/wallpaper.log}" old new
+    old="$(pgrep -x swaybg 2>/dev/null | tr '\n' ' ')"
 
-    # Never kill a hyprpaper that is running. autostart.lua starts one and
-    # calls this script in the same breath, and live.lua used to call it a
-    # second time a few seconds later — so two copies of this function ran at
-    # once, each killing the other's hyprpaper and then waiting for the daemon
-    # it had just destroyed. The log showed two "did not answer in 10s" lines
-    # seven seconds apart, which is impossible for one caller.
-    #
-    # Start one only if there genuinely is none, then keep waiting. A slow
-    # machine — or a medium reading hyprpaper off the stick with a cold cache —
-    # can take well over ten seconds to open its socket.
-    if ! pgrep -x hyprpaper >/dev/null 2>&1; then
-        hyprpaper >/dev/null 2>&1 &
-    fi
-    for _ in $(seq 1 80); do
-        sleep 0.25
-        hyprctl hyprpaper wallpaper ",$img" >/dev/null 2>&1 && {
-            printf '%s applied on the second pass: %s\n' "$(date +%T)" "$img" >> "$log" 2>/dev/null
-            return 0
-        }
-    done
-    printf '%s gave up; hyprpaper never accepted %s\n' "$(date +%T)" "$img" >> "$log" 2>/dev/null
-    die "hyprpaper would not accept $img"
-}
+    # No --output: swaybg applies to every output when none is named, which is
+    # what we want and one fewer thing to quote.
+    swaybg --image "$img" --mode fill >/dev/null 2>&1 &
+    new=$!
 
-# Rewrite the preload/wallpaper lines in place, leaving the comments alone.
-# The path goes in through -v so nothing in it is read as a regex.
-#
-# This collapses the file down to a single wallpaper on every output. If you
-# ever hand-write per-monitor `wallpaper = DP-3, ...` lines, stop using the
-# picker or it will flatten them.
-persist() {
-    local img="$1" tmp
-    [[ -w $HYPRPAPER_CONF ]] || return 0
-    tmp="$(mktemp "${HYPRPAPER_CONF}.XXXXXX")" || return 0
-    if awk -v img="$img" '
-        /^[[:space:]]*preload[[:space:]]*=/ {
-            if (!p) { print "preload = " img; p = 1 }
-            next
-        }
-        /^[[:space:]]*wallpaper[[:space:]]*=/ {
-            if (!w) { print "wallpaper = , " img; w = 1 }
-            next
-        }
-        { print }
-        END {
-            if (!p) print "preload = " img
-            if (!w) print "wallpaper = , " img
-        }
-    ' "$HYPRPAPER_CONF" > "$tmp"; then
-        chmod 644 "$tmp"; mv "$tmp" "$HYPRPAPER_CONF"
-    else
-        rm -f "$tmp"
+    # Long enough to have failed. swaybg exits on an unreadable image, and a
+    # dead one looks exactly like a working one if nobody checks.
+    sleep 0.5
+    if ! kill -0 "$new" 2>/dev/null; then
+        printf '%s swaybg exited immediately for %s\n' "$(date +%T)" "$img" >> "$log" 2>/dev/null
+        die "swaybg would not display $img"
     fi
+
+    if [[ -n ${old// /} ]]; then
+        kill $old 2>/dev/null || true
+    fi
+    printf '%s swaybg pid %s showing %s\n' "$(date +%T)" "$new" "$img" >> "$log" 2>/dev/null
+    return 0
 }
 
 # Keep the lock screen on the same image. Only the `path` inside hyprlock's
@@ -216,7 +165,9 @@ case "${1:-}" in
         ;;
     "")
         collect
-        current="$(hyprctl hyprpaper listactive 2>/dev/null | head -1 | cut -d' ' -f2- || true)"
+        # swaybg has no IPC to ask, and the recorded choice is what it was
+        # started from, so the file is the answer.
+        current="$([[ -r $ACTIVE_FILE ]] && <"$ACTIVE_FILE" || true)"
         choice="$(printf '%s\n' "${LABELS[@]}" \
             | wofi --dmenu --prompt "Wallpaper${current:+ (${current##*/})}" \
                    --width 520 --height 420 --cache-file /dev/null --insensitive)" || exit 0

@@ -31,22 +31,18 @@ hl.on("hyprland.start", function()
     -- that has not installed its handler yet. scripts/waybar.sh has the story.
     hl.exec_cmd("~/.config/hypr/scripts/waybar.sh")
     hl.exec_cmd("mako")
-    hl.exec_cmd("hyprpaper")
 
-    -- And then tell it what to show, rather than trusting it to read its own
-    -- configuration. hyprpaper does not reliably apply hyprpaper.conf at
-    -- startup — on some outputs it logs "Monitor <name> has no target: no wp
-    -- will be created" and leaves the desktop bare, with the correct file
-    -- named in the config it just read. Setting the same wallpaper over IPC
-    -- works every time, and that is the path the picker already uses.
+    -- The wallpaper. There is no daemon to start first: --restore reads the
+    -- recorded choice and runs swaybg with it, and swaybg takes the image as
+    -- an argument, so there is nothing to wait for and no ordering to get
+    -- right. A no-op when nothing has been chosen.
     --
-    -- This is why a wallpaper chosen with SUPER+W would survive until the next
-    -- reboot and then vanish: the picker applies over IPC and it appears; the
-    -- config it also writes is what does not come back.
-    --
-    -- --restore reads the recorded choice and applies it. It is a no-op when
-    -- nothing has been chosen, and it retries once if hyprpaper is not
-    -- listening yet, so the ordering here does not have to be exact.
+    -- This used to start hyprpaper here and then apply over IPC, because
+    -- hyprpaper would not reliably show what its own config named. That call
+    -- answers "ok" whether or not anything was painted, so a desktop that came
+    -- up bare could not be told from one that worked, and on install media it
+    -- never answered at all. Three rounds of timeout tuning did not fix it;
+    -- removing the daemon did.
     hl.exec_cmd("~/.config/hypr/scripts/wallpaper.sh --restore")
     hl.exec_cmd("hypridle")
     hl.exec_cmd("swayosd-server")

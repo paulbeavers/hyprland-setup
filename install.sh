@@ -444,7 +444,7 @@ PKGS_AUDIO=(
 )
 PKGS_HYPRLAND=(
     hyprland uwsm
-    hyprpaper hyprlock hypridle hyprpicker hyprsunset
+    swaybg hyprlock hypridle hyprpicker hyprsunset
     hyprpolkitagent hyprland-guiutils
     xdg-desktop-portal-hyprland xdg-desktop-portal-gtk
     qt5-wayland qt6-wayland
@@ -530,7 +530,7 @@ if [[ ${DISTRO:-} == fedora ]]; then
     # COPR, which the system phase enables if nothing already provides them.
     PKGS_HYPRLAND=(
         hyprland uwsm
-        hyprpaper hyprlock hypridle hyprpicker hyprsunset
+        swaybg hyprlock hypridle hyprpicker hyprsunset
         hyprpolkitagent hyprland-guiutils
         xdg-desktop-portal-hyprland xdg-desktop-portal-gtk
         qt5-qtwayland qt6-qtwayland
@@ -1585,12 +1585,12 @@ EOF
     else
         warn "imagemagick not available; drop an image in $wall_dir"
     fi
-    # hyprpaper.conf and hyprlock.conf both name the current wallpaper, and both
+    # hyprlock.conf names the current wallpaper, and it
     # were just overwritten by the config sync. Put the recorded pick back.
     #
     # --restore is a no-op when nothing has been picked yet, which is exactly
     # the case on a first install — so the desktop came up with whatever the
-    # freshly synced hyprpaper.conf happened to name, and nothing had ever been
+    # freshly synced config happened to name, and nothing had ever been
     # applied. Fall back to a real image, and record it, so a new machine has a
     # wallpaper the first time it is logged into.
     wall_script="$CONFIG_DST/hypr/scripts/wallpaper.sh"

@@ -92,7 +92,7 @@ is a multiple of 1/120 *and* divides the resolution into whole pixels both
 ways. Hyprland accepts anything and then silently snaps, so a config can say
 1.5 while the session runs at 1.6. `scales.py` enumerates the legal ones.
 
-## Two traps that cost a day each
+## Three traps that cost a day each
 
 **kitty remembers being maximized, and asks for it again.** Every terminal on
 an installed system came up covering the screen with the tiled windows behind
@@ -106,19 +106,26 @@ geometry is the tiler's decision. It never showed on the medium because the
 live user's home is a fresh overlay each boot, so the cache never survived to
 be read — which is the shape of every "installs but not live" bug here.
 
-**Never kill a hyprpaper that is running.** `autostart.lua` starts hyprpaper
-and calls `wallpaper.sh --restore` in the same breath, so the first IPC
-attempts land before its socket exists. The old fallback waited one second,
-then killed hyprpaper and restarted it. When a second caller was added to "fix"
-the missing wallpaper, the two ran concurrently and each destroyed the daemon
-the other was waiting for; `/tmp/wallpaper.log` showed two "did not answer in
-10s" entries seven seconds apart, which one caller cannot produce. It now
-starts hyprpaper only if none is running and waits twenty seconds.
+**The wallpaper is swaybg now, and that was the fix.** hyprpaper's apply is an
+IPC call that answers "ok" whether or not it has a surface to paint on, and
+0.8.4 has no verb to ask what it is showing — so a bare desktop could not be
+told from a working one, and three rounds of timeout tuning chased a race that
+may never have been the problem. On install media it never answered at all:
+`/tmp/wallpaper.log` read "did not answer in 10s" and then "would not accept",
+after twenty seconds of waiting, on every boot.
 
-`wallpaper.sh` writes a line to `/tmp/wallpaper.log` on the way through. Keep
-it: `hyprctl hyprpaper wallpaper` answers "ok" whether or not hyprpaper has a
-surface to paint on, and 0.8.4 has no verb to ask what it is showing, so the
-reply proves nothing and the log is the only record of what was attempted.
+swaybg takes the image as an argument. No daemon, no socket, no ordering —
+`autostart.lua` calls `wallpaper.sh --restore` and nothing has to be waited
+for. Changing wallpaper replaces the process: start the new one, then kill the
+old, so the bare compositor never shows between them.
+
+Two things from that episode are worth keeping. `wallpaper.sh` still writes a
+line to `/tmp/wallpaper.log`, because a wallpaper that does not appear leaves no
+other trace on the machine it happened on. And a VM cannot test any of this:
+`-vga std` gives no usable GL, so hyprpaper could not paint there by any route,
+and I read its "no target" message as a config mismatch when it meant "no
+surface" — then built a fix on that reading. Wallpaper behaviour is judged on
+real hardware or not at all.
 
 ## Broadcom: check the kernel's table, not a datasheet
 

@@ -99,6 +99,17 @@ apply() {
     # Changing the wallpaper means replacing the process. Start the new one
     # before killing the old so the bare compositor never shows between them.
     local log="${WALLPAPER_LOG:-/tmp/wallpaper.log}" old new
+
+    # Say so plainly when the package is missing. `install.sh --configs-only`
+    # deploys this script without touching packages, so a machine configured
+    # that way gets the swaybg version of it while still having hyprpaper
+    # installed — and "nothing happens when I change the wallpaper" is a
+    # miserable way to find that out.
+    if ! command -v swaybg >/dev/null 2>&1; then
+        printf '%s swaybg is not installed; cannot draw %s\n' "$(date +%T)" "$img" >> "$log" 2>/dev/null
+        die "swaybg is not installed — pacman -S swaybg (or re-run install.sh)"
+    fi
+
     old="$(pgrep -x swaybg 2>/dev/null | tr '\n' ' ')"
 
     # No --output: swaybg applies to every output when none is named, which is

@@ -110,7 +110,14 @@ apply() {
         die "swaybg is not installed — pacman -S swaybg (or re-run install.sh)"
     fi
 
-    old="$(pgrep -x swaybg 2>/dev/null | tr '\n' ' ')"
+    # || true is load-bearing. pgrep exits 1 when nothing matches, which is
+    # every boot, and under `set -euo pipefail` that status passes through the
+    # pipe to the assignment and kills the script — before swaybg is started
+    # and before anything is logged. The symptom was a desktop with no
+    # wallpaper, no swaybg, and an empty /tmp/wallpaper.log: the one file meant
+    # to explain a missing wallpaper could not be written because the failure
+    # happened first.
+    old="$(pgrep -x swaybg 2>/dev/null | tr '\n' ' ' || true)"
 
     # No --output: swaybg applies to every output when none is named, which is
     # what we want and one fewer thing to quote.
